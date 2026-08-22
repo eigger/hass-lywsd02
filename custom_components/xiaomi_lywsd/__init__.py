@@ -77,10 +77,12 @@ SERVICE_DUMP_GATT = "dump_gatt"
 async def async_read_battery_into(client, device, coordinator) -> None:
     """Piggyback a battery read on a connection that is already open.
 
-    One byte from EBE0CCC4, so it costs nothing next to a clock write — and it
-    is the only way a clock-only install (climate polling off by default) ever
-    learns the battery level. ``get_battery`` swallows its own errors, so this
-    can never turn a successful sync into a failure.
+    One byte from EBE0CCC4, so it costs nothing next to whatever the connection
+    was opened for — and it is the only way a clock-only install (climate
+    polling off by default) ever learns the battery level. Every path that
+    holds a connection calls this: both selects, both services, the button and
+    automatic sync. ``get_battery`` swallows its own errors, so it can never
+    turn a successful operation into a failure.
     """
     battery = await device.get_battery(client)
     if battery is not None:
@@ -370,6 +372,7 @@ async def _service_read_state(
     async def _op(client, device):
         units = await device.get_units(client)
         coordinator.data.units = units
+        await async_read_battery_into(client, device, coordinator)
         return units
 
     try:

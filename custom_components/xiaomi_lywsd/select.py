@@ -104,6 +104,7 @@ class LywsdDisplayUnitsSelect(_LywsdSelectBase):
         async def _op(client, device):
             await device.set_units(client, option)
             coordinator.data.units = option
+            await async_read_battery_into(client, device, coordinator)
             return option
 
         try:
@@ -187,8 +188,8 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
             coordinator.record_failure()
             if isinstance(err, LywsdUnsupportedError):
                 raise HomeAssistantError(
-                    "기기가 12/24시간 전환 명령을 거부했습니다 "
-                    "(이 펌웨어는 지원하지 않을 수 있습니다)"
+                    "기기가 시계 쓰기는 받아들였지만 12/24시간 전환 명령은 "
+                    "거부했습니다. 이 펌웨어는 해당 기능을 지원하지 않습니다."
                 ) from err
             if isinstance(err, HomeAssistantError):
                 raise

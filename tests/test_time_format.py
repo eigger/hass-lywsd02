@@ -58,20 +58,6 @@ async def test_mode_write_is_followed_by_a_clock_write():
     assert result.written_epoch == epoch
 
 
-@pytest.mark.asyncio
-async def test_rejected_mode_write_raises_unsupported():
-    device = Lywsd02mmc()
-    client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
-
-    async def refuse(uuid, data, response=False):
-        raise RuntimeError("write not permitted")
-
-    client.write_gatt_char = refuse
-
-    with pytest.raises(LywsdUnsupportedError):
-        await device.set_time_format(client, "24h", WHEN, 9)
-
-
 def _entry():
     address = "AA:BB:CC:DD:EE:FF"
     entry = MagicMock()
@@ -223,3 +209,63 @@ async def test_unreadable_battery_never_breaks_a_sync():
 
     await async_read_battery_into(client, Lywsd02mmc(), coordinator)
     assert coordinator.data.battery == 55  # previous value kept
+
+
+@pytest.mark.asyncio
+async def test_rejected_mode_but_working_clock_write_is_unsupported():
+    """The clock write is the discriminator: the characteristic works, so the
+    device refused this particular command."""
+    device = Lywsd02mmc()
+    epoch = int(WHEN.timestamp())
+    client = FakeBleakClient({UUID_TIME: encode_time(epoch, 9)})
+    real_write = client.write_gatt_char
+
+    async def refuse_seven_bytes(uuid, data, response=False):
+        if len(data) == 7:
+            raise RuntimeError("write not permitted")
+        return await real_write(uuid, data, response=response)
+
+    client.write_gatt_char = refuse_seven_bytes
+
+    with pytest.raises(LywsdUnsupportedError, match="accepted a clock write"):
+        await device.set_time_format(client, "12h", WHEN, 9)
+
+    # The clock was still corrected on the way out.
+    assert any(len(w[1]) == 5 for w in client.writes)
+
+
+@pytest.mark.asyncio
+async def test_both_writes_failing_is_not_blamed_on_firmware():
+    device = Lywsd02mmc()
+    client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
+
+    async def refuse_everything(uuid, data, response=False):
+        raise RuntimeError("insufficient authentication")
+
+    client.write_gatt_char = refuse_everything
+
+    with pytest.raises(RuntimeError, match="insufficient authentication"):
+        await device.set_time_format(client, "12h", WHEN, 9)
+
+
+@pytest.mark.asyncio
+async def test_battery_read_on_units_write_connection():
+    """display_units holds a connection too — it should not waste it."""
+    from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
+        UUID_BATTERY,
+        UUID_UNITS,
+        encode_units,
+    )
+
+    device = Lywsd02mmc()
+    client = FakeBleakClient(
+        {UUID_UNITS: encode_units("celsius"), UUID_BATTERY: bytes([81])}
+    )
+    _hass, entry = _entry()
+    coordinator = entry.runtime_data
+
+    await device.set_units(client, "fahrenheit")
+    from custom_components.xiaomi_lywsd import async_read_battery_into
+
+    await async_read_battery_into(client, device, coordinator)
+    assert coordinator.data.battery == 81

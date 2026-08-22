@@ -189,12 +189,15 @@ class Lywsd02mmc(LywsdDevice):
         unconditional re-sync on the same connection, which repairs the clock
         before the caller ever sees it.
 
-        A device that is still connected but refused the write is reported as
-        unsupported. A dropped link or a timeout is re-raised as-is: neither
-        says anything about what the firmware implements, and mislabelling them
-        would send the user hunting for a firmware problem that is not there.
+        Failure classification, from most to least certain: a dropped link or a
+        timeout is re-raised untouched; a rejected mode command that is followed
+        by an accepted clock write on the *same characteristic* is genuinely
+        unsupported firmware; if both writes fail it is the connection, not the
+        firmware. Mislabelling any of these sends the user hunting for a problem
+        that is not there.
         """
         payload = encode_time_format(time_format)
+        mode_error: Exception | None = None
         try:
             await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
         except (TimeoutError, asyncio.CancelledError):
@@ -202,16 +205,30 @@ class Lywsd02mmc(LywsdDevice):
         except Exception as err:
             if not getattr(client, "is_connected", True):
                 raise
-            raise LywsdUnsupportedError(
-                f"device rejected the {time_format} clock mode command: {err}"
-            ) from err
+            mode_error = err
 
+        # The clock write runs either way. It repairs a device that read the
+        # mode command as a time write, and it doubles as a probe: the same
+        # characteristic accepting a 5-byte write proves the link and the
+        # permissions are fine, so a rejected 7-byte write really was the
+        # firmware refusing *this command* rather than a transport problem.
         try:
-            return await self.set_time(client, when, tz_offset_hours)
+            result = await self.set_time(client, when, tz_offset_hours)
         except Exception as err:
+            if mode_error is not None:
+                # Both writes failed — that is a connection or permission
+                # problem, not a verdict on the firmware.
+                raise mode_error
             raise LywsdClockRepairError(
                 f"clock mode was written but the follow-up time write failed: {err}"
             ) from err
+
+        if mode_error is not None:
+            raise LywsdUnsupportedError(
+                f"device accepted a clock write but rejected the {time_format} "
+                f"mode command: {mode_error}"
+            ) from mode_error
+        return result
 
     async def get_units(self, client) -> str:
         raw = await client.read_gatt_char(UUID_UNITS)
