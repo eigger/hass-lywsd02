@@ -69,9 +69,9 @@ bluetooth_proxy:
 Each sync measures how far the clock had wandered since the previous one, which
 gives a drift rate in seconds per day. The next interval is the tolerated error
 divided by that rate, clamped to 1–180 days: an accurate unit stretches out to
-months on its own, a sloppy one keeps a short cycle. Until two syncs have been observed it falls back to 7 days; a clock that
-holds to within the device's one-second resolution goes straight to the
-180-day ceiling.
+months on its own, a sloppy one keeps a short cycle. Until two syncs have been
+observed it falls back to 7 days; a clock that holds to within the device's
+one-second resolution goes straight to the 180-day ceiling.
 
 The schedule is **stored on disk**, so restarting Home Assistant does not restart
 the countdown — a 30-day interval still fires on day 30 even on a box that
