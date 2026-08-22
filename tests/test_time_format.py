@@ -22,6 +22,7 @@ from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
 )
 from custom_components.xiaomi_lywsd.select import LywsdTimeFormatSelect
 from homeassistant.exceptions import HomeAssistantError
+from tests.stub_clock import StubClock
 from tests.fake_client import FakeBleakClient
 
 UTC = dt.timezone.utc
@@ -49,13 +50,14 @@ async def test_mode_write_is_followed_by_a_clock_write():
     epoch = int(WHEN.timestamp())
     client = FakeBleakClient({UUID_TIME: encode_time(epoch, 9)})
 
-    result = await device.set_time_format(client, "12h", WHEN, 9)
+    result = await device.set_time_format(client, "12h", WHEN, 9, **StubClock().hooks)
 
     writes = [w for w in client.writes if w[0] == UUID_TIME.lower()]
     assert len(writes) == 2
     assert writes[0][1] == encode_time_format("12h")
     assert len(writes[1][1]) == 5  # the repair write
-    assert result.written_epoch == epoch
+    # Aimed at the next whole second rather than the sampled one.
+    assert result.written_epoch == epoch + 1
 
 
 def _entry():
@@ -124,7 +126,7 @@ async def test_dropped_link_is_not_reported_as_unsupported():
     client.write_gatt_char = drop
 
     with pytest.raises(RuntimeError, match="connection lost"):
-        await device.set_time_format(client, "24h", WHEN, 9)
+        await device.set_time_format(client, "24h", WHEN, 9, **StubClock().hooks)
 
 
 @pytest.mark.asyncio
@@ -145,7 +147,7 @@ async def test_failed_clock_repair_is_its_own_error():
     client.write_gatt_char = fail_second
 
     with pytest.raises(LywsdClockRepairError):
-        await device.set_time_format(client, "12h", WHEN, 9)
+        await device.set_time_format(client, "12h", WHEN, 9, **StubClock().hooks)
 
 
 @pytest.mark.asyncio
@@ -181,7 +183,7 @@ async def test_timeout_is_not_reported_as_unsupported():
     client.write_gatt_char = stall
 
     with pytest.raises(TimeoutError):
-        await device.set_time_format(client, "24h", WHEN, 9)
+        await device.set_time_format(client, "24h", WHEN, 9, **StubClock().hooks)
 
 
 @pytest.mark.asyncio
@@ -228,7 +230,7 @@ async def test_rejected_mode_but_working_clock_write_is_unsupported():
     client.write_gatt_char = refuse_seven_bytes
 
     with pytest.raises(LywsdUnsupportedError, match="accepted a clock write"):
-        await device.set_time_format(client, "12h", WHEN, 9)
+        await device.set_time_format(client, "12h", WHEN, 9, **StubClock().hooks)
 
     # The clock was still corrected on the way out.
     assert any(len(w[1]) == 5 for w in client.writes)
@@ -245,7 +247,7 @@ async def test_both_writes_failing_is_not_blamed_on_firmware():
     client.write_gatt_char = refuse_everything
 
     with pytest.raises(RuntimeError, match="insufficient authentication"):
-        await device.set_time_format(client, "12h", WHEN, 9)
+        await device.set_time_format(client, "12h", WHEN, 9, **StubClock().hooks)
 
 
 @pytest.mark.asyncio
