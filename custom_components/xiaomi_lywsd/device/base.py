@@ -16,6 +16,18 @@ class LywsdVerifyError(LywsdDeviceError):
     """Write succeeded but read-back did not match the expected value."""
 
 
+class LywsdUnsupportedError(LywsdDeviceError):
+    """The device firmware does not implement this feature."""
+
+
+class LywsdClockRepairError(LywsdDeviceError):
+    """A mode command landed but the follow-up clock write did not.
+
+    Distinct because the display may now be showing 1970 and the user has to
+    run a sync — silently reporting a generic failure would hide that.
+    """
+
+
 @dataclass(frozen=True)
 class ClimateReading:
     """One temperature/humidity sample from GATT notify."""
@@ -59,6 +71,19 @@ class LywsdDevice(ABC):
     @abstractmethod
     async def set_units(self, client, units: str) -> None:
         """Write display units; roll back on verify failure."""
+
+    async def set_time_format(
+        self, client, time_format: str, when: datetime, tz_offset_hours: int
+    ) -> SyncResult:
+        """Switch the E-Ink clock between 12h and 24h, then re-sync the clock.
+
+        Returns the sync result of the trailing clock write. Not every LYWSD02
+        firmware implements the mode command, so the default refuses rather
+        than writing bytes a device might misread.
+        """
+        raise LywsdUnsupportedError(
+            f"{type(self).__name__} does not support time format switching"
+        )
 
     async def read_history(self, client):
         """Phase 3 — not implemented yet."""

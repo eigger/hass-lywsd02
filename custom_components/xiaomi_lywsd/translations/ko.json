@@ -36,13 +36,15 @@
           "scan_interval": "폴링 주기 (분)",
           "climate_sensors": "온도 / 습도 / 배터리 센서 사용",
           "retry_count": "BLE 쓰기 재시도 횟수",
-          "auto_sync_hours": "자동 시간 동기화 주기"
+          "auto_sync": "자동 시간 동기화",
+          "auto_sync_tolerance": "자동 모드: 허용 시계 오차(초)"
         },
         "data_description": {
           "scan_interval": "기후 센서가 켜져 있을 때 GATT로 온습도를 읽는 주기입니다. 기본 30분(CR2032). 범위 2–60분.",
           "climate_sensors": "기본 끔(시계 제어만). 켜면 온습도/배터리 엔티티를 만들고 주기적 GATT 폴링을 시작합니다. 첫 성공 읽기 후 센서가 available이 됩니다.",
           "retry_count": "쓰기 실패로 판정하기 전 연결 시도 횟수입니다.",
-          "auto_sync_hours": "Home Assistant 시각을 기기에 쓰는 주기입니다. 기본 끔. 24시간 미만 옵션은 없습니다."
+          "auto_sync": "HA 시각을 기기에 얼마나 자주 쓸지 정합니다. 자동은 동기화 사이에 측정된 오차로 주기를 계산해, 정확한 개체는 몇 달까지 늘어나고 잘 밀리는 개체는 자주 맞춥니다. 일정이 저장되므로 HA를 재시작해도 주기가 유지됩니다.",
+          "auto_sync_tolerance": "자동 모드에서만 사용합니다. 허용 오차를 하루 관측 드리프트로 나눠 주기를 정하며 1~180일로 제한됩니다."
         }
       }
     }
@@ -60,6 +62,13 @@
           "celsius": "섭씨 (°C)",
           "fahrenheit": "화씨 (°F)"
         }
+      },
+      "time_format": {
+        "name": "시계 표시 모드 (E-Ink, 실험적)",
+        "state": {
+          "12h": "12시간제",
+          "24h": "24시간제"
+        }
       }
     },
     "sensor": {
@@ -74,9 +83,6 @@
       },
       "last_sync": {
         "name": "마지막 동기화"
-      },
-      "clock_drift": {
-        "name": "시계 오차"
       },
       "failure_count": {
         "name": "실패 횟수"

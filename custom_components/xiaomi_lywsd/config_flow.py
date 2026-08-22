@@ -30,18 +30,22 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
-    CONF_AUTO_SYNC_HOURS,
+    CONF_AUTO_SYNC,
+    CONF_AUTO_SYNC_TOLERANCE,
     CONF_CLIMATE_SENSORS,
     CONF_RETRY_COUNT,
     CONF_SCAN_INTERVAL,
-    DEFAULT_AUTO_SYNC_HOURS,
+    DEFAULT_AUTO_SYNC,
+    DEFAULT_AUTO_SYNC_TOLERANCE,
     DEFAULT_CLIMATE_SENSORS,
     DEFAULT_RETRY_COUNT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MAX_AUTO_SYNC_TOLERANCE,
     MAX_SCAN_INTERVAL,
+    MIN_AUTO_SYNC_TOLERANCE,
     MIN_SCAN_INTERVAL,
-    scan_interval_minutes_for_ui,
+    scan_interval_minutes,
 )
 from .device import device_for
 
@@ -68,16 +72,29 @@ OPTIONS_SCHEMA = {
             mode=NumberSelectorMode.BOX,
         )
     ),
-    vol.Required(
-        CONF_AUTO_SYNC_HOURS, default=str(DEFAULT_AUTO_SYNC_HOURS)
-    ): SelectSelector(
+    vol.Required(CONF_AUTO_SYNC, default=DEFAULT_AUTO_SYNC): SelectSelector(
         SelectSelectorConfig(
             options=[
+                {"value": "auto", "label": "Automatic (drift based)"},
                 {"value": "0", "label": "Disabled"},
-                {"value": "24", "label": "Every 24 hours"},
-                {"value": "168", "label": "Every 7 days"},
+                {"value": "1", "label": "Every day"},
+                {"value": "7", "label": "Every 7 days"},
+                {"value": "30", "label": "Every 30 days"},
+                {"value": "90", "label": "Every 90 days"},
+                {"value": "180", "label": "Every 180 days"},
             ],
             mode=SelectSelectorMode.DROPDOWN,
+        )
+    ),
+    vol.Required(
+        CONF_AUTO_SYNC_TOLERANCE, default=DEFAULT_AUTO_SYNC_TOLERANCE
+    ): NumberSelector(
+        NumberSelectorConfig(
+            min=MIN_AUTO_SYNC_TOLERANCE,
+            max=MAX_AUTO_SYNC_TOLERANCE,
+            step=10,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement="s",
         )
     ),
 }
@@ -101,7 +118,8 @@ def _title_for(address: str) -> str:
 class LywsdConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Xiaomi LYWSD."""
 
-    VERSION = 1
+    # 2: auto_sync_hours -> auto_sync (days/"auto"), scan_interval -> minutes.
+    VERSION = 2
 
     def __init__(self) -> None:
         super().__init__()
@@ -213,10 +231,10 @@ class OptionsFlowHandler(OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            # SelectSelector returns strings; normalize to int.
-            if CONF_AUTO_SYNC_HOURS in user_input:
-                user_input[CONF_AUTO_SYNC_HOURS] = int(
-                    user_input[CONF_AUTO_SYNC_HOURS]
+            # The auto-sync choice stays a string ("auto" has no numeric form).
+            if CONF_AUTO_SYNC_TOLERANCE in user_input:
+                user_input[CONF_AUTO_SYNC_TOLERANCE] = int(
+                    user_input[CONF_AUTO_SYNC_TOLERANCE]
                 )
             if CONF_RETRY_COUNT in user_input:
                 user_input[CONF_RETRY_COUNT] = int(user_input[CONF_RETRY_COUNT])
@@ -225,14 +243,8 @@ class OptionsFlowHandler(OptionsFlowWithReload):
             return self.async_create_entry(title="", data=user_input)
 
         suggested_values = {**self.config_entry.data, **self.config_entry.options}
-        # Select options are strings in the UI.
-        if CONF_AUTO_SYNC_HOURS in suggested_values:
-            suggested_values[CONF_AUTO_SYNC_HOURS] = str(
-                suggested_values[CONF_AUTO_SYNC_HOURS]
-            )
-        # Legacy installs stored seconds; the selector is minutes now.
         if CONF_SCAN_INTERVAL in suggested_values:
-            suggested_values[CONF_SCAN_INTERVAL] = scan_interval_minutes_for_ui(
+            suggested_values[CONF_SCAN_INTERVAL] = scan_interval_minutes(
                 suggested_values[CONF_SCAN_INTERVAL]
             )
 

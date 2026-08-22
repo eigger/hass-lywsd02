@@ -72,6 +72,9 @@
 | epoch 의미 | **UTC epoch** 가정 (h4/lywsd02). 로컬 epoch를 쓰는 펌웨어면 `drift_seconds`가 tz만큼 어긋남 → T1에서 확인 | 미검증 |
 | 4바이트 only read | tz=0으로 취급 | 커뮤니티 |
 | `response=` | `True` (withResponse) | 미검증 — False도 probe에서 확인 |
+| 12/24시간 모드 | **같은 UUID에 7바이트** `<IHB` (0, 0, mode) — `0xAA`=12h, `0x00`=24h | 미검증 — ashald/home-assistant-lywsd02 |
+| 모드 명령의 epoch | `0`. 기기가 이를 시각 write로 읽으면 1970년으로 감 → 구현은 모드 write 직후 항상 시각을 다시 씀 | 미검증 |
+| 모드 지원 여부 | 펌웨어 리비전에 따라 다름. read-back이 없어 낙관적 처리 | 사용자 보고 |
 | read-back 허용오차 | ±2초 | 계획서 기준 |
 
 음수 tz(예: -5) 왕복으로 int8 vs uint8을 판정해야 한다. 한국(+9)만 테스트하면

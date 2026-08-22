@@ -12,7 +12,7 @@ from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceIn
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from . import async_execute
+from . import async_execute, async_read_battery_into
 from .const import MANUFACTURER, MODEL
 from .device import LywsdVerifyError
 from .types import LywsdConfigEntry
@@ -78,12 +78,14 @@ class LywsdSyncTimeButton(ButtonEntity):
                 client, dt_util.now(), tz_offset_hours
             )
             coord = self._entry.runtime_data
-            coord.data.last_sync = dt_util.now()
-            coord.data.clock_drift = result.drift_seconds
+            coord.note_sync(result.drift_seconds, dt_util.now())
+            await async_read_battery_into(client, device, coord)
             return result
 
         try:
             await async_execute(self.hass, self._entry, _op)
+            # Reschedule before publishing so next_sync is the new one.
+            await self._entry.runtime_data.async_after_sync()
             self._entry.runtime_data.record_action_success()
         except Exception as err:
             self._entry.runtime_data.record_failure()

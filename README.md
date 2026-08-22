@@ -19,7 +19,8 @@ covers LYWSD02-class devices core cannot read.
 
 | Feature | Provided by |
 | --- | --- |
-| Temperature / humidity / battery | **This integration** (periodic GATT) |
+| Temperature / humidity | **This integration** (periodic GATT poll) |
+| Battery | **This integration** (read on any connection, incl. clock sync) |
 | E-Ink clock time sync | **This integration** |
 | °C / °F display units (screen) | **This integration** |
 
@@ -50,13 +51,55 @@ bluetooth_proxy:
 
 ## Options
 
-- **Enable climate sensors** (default **off**) — creates temperature /
-  humidity / battery entities and starts GATT polling. Sensors stay
-  unavailable until the first successful reading
+- **Enable climate sensors** (default **off**) — creates temperature and
+  humidity entities and starts GATT polling. They stay unavailable until the
+  first successful reading. **Battery is not part of this** — it is one byte
+  from `EBE0CCC4` read on whatever connection is already open, so a clock-only
+  install still gets a battery level at every automatic sync
 - **Poll interval** (default **30 minutes**, range 2–60) — only used when
   climate sensors are enabled. LYWSD02 uses a **CR2032** coin cell; BLE
   connect time dominates drain
-- BLE retries, automatic time sync (default **off** / 24h / 7d)
+- **Automatic time sync** (default **Automatic**) — off, every 1 / 7 / 30 / 90 /
+  180 days, or drift based
+- **Tolerated clock error** (default **60 s**) — Automatic mode only
+- BLE retry count
+
+### Automatic (drift based) sync
+
+Each sync measures how far the clock had wandered since the previous one, which
+gives a drift rate in seconds per day. The next interval is the tolerated error
+divided by that rate, clamped to 1–180 days: an accurate unit stretches out to
+months on its own, a sloppy one keeps a short cycle. Until two syncs have been
+observed it falls back to 7 days.
+
+The schedule is **stored on disk**, so restarting Home Assistant does not restart
+the countdown — a 30-day interval still fires on day 30 even on a box that
+reboots weekly. A sync that came due while Home Assistant was down runs shortly
+after startup. Repeated failures back off exponentially (30 min → 6 h) rather
+than retrying every minute.
+
+### Clock diagnostics
+
+`sensor.*_last_sync` carries the clock health as attributes rather than separate
+entities:
+
+| Attribute | Meaning |
+| --- | --- |
+| `drift_seconds` | Error measured just before the last correction |
+| `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
+| `next_sync` | When the next automatic sync is scheduled |
+
+## Upgrading from 0.1.x
+
+Config entries are migrated to version 2 on first load: `auto_sync_hours`
+becomes the day-based `auto_sync` choice (**an install that never touched the
+options stays off**, matching the 0.1.x default), and a poll interval stored in
+seconds becomes minutes.
+
+`sensor.*_clock_drift` is no longer created — its values moved onto `last_sync`
+attributes. The old entity stays in the registry as unavailable until deleted by
+hand.
+
 ## Development
 
 ```bash

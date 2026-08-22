@@ -172,9 +172,10 @@ def test_climate_sensors_off_disables_polling():
 
 def test_default_scan_interval_is_30_minutes():
     from custom_components.xiaomi_lywsd.const import (
-        DEFAULT_AUTO_SYNC_HOURS,
+        DEFAULT_AUTO_SYNC,
         DEFAULT_CLIMATE_SENSORS,
         DEFAULT_SCAN_INTERVAL,
+        scan_interval_minutes,
         scan_interval_seconds,
     )
 
@@ -187,11 +188,17 @@ def test_default_scan_interval_is_30_minutes():
         hass.data["xiaomi_lywsd"]["lock"],
         Lywsd02mmc(),
     )
-    assert DEFAULT_AUTO_SYNC_HOURS == 0
+    assert DEFAULT_AUTO_SYNC == "auto"
     assert DEFAULT_CLIMATE_SENSORS is False
     assert DEFAULT_SCAN_INTERVAL == 30
     assert scan_interval_seconds(30) == 1800
-    assert scan_interval_seconds(1800) == 1800  # legacy seconds
+    # Out-of-range values clamp instead of being trusted. A 0.1.x install that
+    # stored seconds (e.g. 1800) therefore lands on the 60-minute ceiling —
+    # accepted, since climate polling is off by default.
+    assert scan_interval_minutes(1800) == 60
+    assert scan_interval_minutes(999) == 60
+    assert scan_interval_minutes(0) == 2
+    assert scan_interval_minutes(None) == 30
     assert coord2.update_interval.total_seconds() == 1800
 
 

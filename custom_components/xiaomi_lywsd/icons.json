@@ -16,6 +16,9 @@
     "select": {
       "display_units": {
         "default": "mdi:temperature-celsius"
+      },
+      "time_format": {
+        "default": "mdi:clock-time-four-outline"
       }
     },
     "sensor": {
@@ -30,9 +33,6 @@
       },
       "last_sync": {
         "default": "mdi:clock-outline"
-      },
-      "clock_drift": {
-        "default": "mdi:clock-alert-outline"
       },
       "failure_count": {
         "default": "mdi:alert-circle"

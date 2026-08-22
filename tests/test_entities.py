@@ -267,11 +267,11 @@ def test_diagnostic_sensors_available_when_poll_failed():
     coord.data.last_failure = datetime.now(timezone.utc)
     coord.data.clock_drift = -12.5
 
+    def _diag(key: str) -> LywsdSensor:
+        return LywsdSensor(coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == key))
+
     temp = LywsdSensor(coord, CLIMATE_SENSORS[0])
-    last_sync = LywsdSensor(coord, DIAGNOSTIC_SENSORS[0])
-    clock_drift = LywsdSensor(
-        coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "clock_drift")
-    )
+    last_sync = _diag("last_sync")
     failure_count = LywsdSensor(
         coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "failure_count")
     )
@@ -282,9 +282,19 @@ def test_diagnostic_sensors_available_when_poll_failed():
     assert temp.available is False
     assert last_sync.available is True
     assert last_sync.native_value == coord.data.last_sync
-    assert clock_drift.available is True
-    assert clock_drift.native_value == -12.5
+    # Drift now rides on last_sync instead of its own entity.
+    attrs = last_sync.extra_state_attributes
+    assert attrs["drift_seconds"] == -12.5
+    assert failure_count.extra_state_attributes is None
     assert failure_count.available is True
     assert failure_count.native_value == 2
     assert last_failure.available is True
     assert last_failure.native_value == coord.data.last_failure
+
+    # Battery is not climate-gated: it is read on any connection, including a
+    # clock sync, so a failed climate poll must not hide it.
+    battery = _diag("battery")
+    assert battery.available is False  # nothing read yet
+    coord.data.battery = 74
+    assert battery.available is True
+    assert battery.native_value == 74

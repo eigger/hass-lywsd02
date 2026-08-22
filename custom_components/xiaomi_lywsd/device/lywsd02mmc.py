@@ -14,8 +14,10 @@ from typing import ClassVar
 
 from .base import (
     ClimateReading,
+    LywsdClockRepairError,
     LywsdDevice,
     LywsdDeviceError,
+    LywsdUnsupportedError,
     LywsdVerifyError,
     SyncResult,
 )
@@ -27,11 +29,12 @@ UUID_UNITS = "ebe0ccbe-7a0a-4b0c-8a1a-6ff2997da3a6"
 UUID_DATA = "ebe0ccc1-7a0a-4b0c-8a1a-6ff2997da3a6"
 UUID_BATTERY = "ebe0ccc4-7a0a-4b0c-8a1a-6ff2997da3a6"
 
-# Measured on LYWSD02MMC (A4:C1:38:16:C5:C4): stock read was 0x00 while
-# the E-Ink shows °C. h4/lywsd02 used 0xFF for °C — accept both on decode;
-# write the measured 0x00 for celsius.
+# Measured on LYWSD02MMC (A4:C1:38:16:C5:C4): stock read was 0x00 while the
+# E-Ink showed °C. h4/lywsd02 and ashald/home-assistant-lywsd02 both use 0xFF.
+# Firmware revisions differ, so decode accepts either and write uses the
+# measured value.
 UNIT_CELSIUS = b"\x00"
-UNIT_CELSIUS_LEGACY = b"\xff"  # h4/lywsd02 community write value
+UNIT_CELSIUS_ALT = b"\xff"
 UNIT_FAHRENHEIT = b"\x01"
 
 UNITS_TO_CODE = {
@@ -40,13 +43,26 @@ UNITS_TO_CODE = {
 }
 CODE_TO_UNITS = {
     UNIT_CELSIUS: "celsius",
-    UNIT_CELSIUS_LEGACY: "celsius",
+    UNIT_CELSIUS_ALT: "celsius",
     UNIT_FAHRENHEIT: "fahrenheit",
 }
 
 TIME_VERIFY_TOLERANCE = 2.0
 WRITE_RESPONSE = True  # 미검증: community clients use withResponse=True
 DEFAULT_CLIMATE_TIMEOUT = 15.0
+
+# 12h/24h shares the clock characteristic and is told apart by payload length:
+# 5 bytes (<Ib) sets the wall clock, 7 bytes (<IHB) sets the display mode.
+# Source: ashald/home-assistant-lywsd02. Support varies by firmware revision,
+# and the epoch field is zero — a device that reads it as a time write would
+# jump to 1970, so callers must restore the clock afterwards.
+TIME_FORMAT_12H_PAYLOAD = struct.pack("<IHB", 0, 0, 0xAA)
+TIME_FORMAT_24H_PAYLOAD = struct.pack("<IHB", 0, 0, 0x00)
+
+TIME_FORMAT_TO_CODE = {
+    "12h": TIME_FORMAT_12H_PAYLOAD,
+    "24h": TIME_FORMAT_24H_PAYLOAD,
+}
 
 
 def encode_time(epoch: int, tz_offset_hours: int) -> bytes:
@@ -84,6 +100,14 @@ def decode_units(payload: bytes) -> str:
         raise LywsdDeviceError(
             f"unknown units payload hex={bytes(payload).hex()} raw={payload!r}"
         ) from err
+
+
+def encode_time_format(time_format: str) -> bytes:
+    """Encode the 12h/24h display mode command."""
+    try:
+        return TIME_FORMAT_TO_CODE[time_format]
+    except KeyError as err:
+        raise ValueError(f"unknown time format: {time_format}") from err
 
 
 def decode_climate(payload: bytes) -> ClimateReading:
@@ -153,6 +177,58 @@ class Lywsd02mmc(LywsdDevice):
             read_back_epoch=after_epoch,
             drift_seconds=drift_seconds,
         )
+
+    async def set_time_format(
+        self, client, time_format: str, when: datetime, tz_offset_hours: int
+    ) -> SyncResult:
+        """Write the 12h/24h mode, then rewrite the wall clock.
+
+        The mode command carries a zero epoch in the same characteristic used
+        for time. On firmware that does not recognise the 7-byte form the write
+        either fails outright or is taken as a time write — hence the
+        unconditional re-sync on the same connection, which repairs the clock
+        before the caller ever sees it.
+
+        Failure classification, from most to least certain: a dropped link or a
+        timeout is re-raised untouched; a rejected mode command that is followed
+        by an accepted clock write on the *same characteristic* is genuinely
+        unsupported firmware; if both writes fail it is the connection, not the
+        firmware. Mislabelling any of these sends the user hunting for a problem
+        that is not there.
+        """
+        payload = encode_time_format(time_format)
+        mode_error: Exception | None = None
+        try:
+            await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
+        except (TimeoutError, asyncio.CancelledError):
+            raise
+        except Exception as err:
+            if not getattr(client, "is_connected", True):
+                raise
+            mode_error = err
+
+        # The clock write runs either way. It repairs a device that read the
+        # mode command as a time write, and it doubles as a probe: the same
+        # characteristic accepting a 5-byte write proves the link and the
+        # permissions are fine, so a rejected 7-byte write really was the
+        # firmware refusing *this command* rather than a transport problem.
+        try:
+            result = await self.set_time(client, when, tz_offset_hours)
+        except Exception as err:
+            if mode_error is not None:
+                # Both writes failed — that is a connection or permission
+                # problem, not a verdict on the firmware.
+                raise mode_error
+            raise LywsdClockRepairError(
+                f"clock mode was written but the follow-up time write failed: {err}"
+            ) from err
+
+        if mode_error is not None:
+            raise LywsdUnsupportedError(
+                f"device accepted a clock write but rejected the {time_format} "
+                f"mode command: {mode_error}"
+            ) from mode_error
+        return result
 
     async def get_units(self, client) -> str:
         raw = await client.read_gatt_char(UUID_UNITS)
