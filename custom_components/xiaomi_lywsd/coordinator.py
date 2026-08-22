@@ -43,6 +43,10 @@ class LywsdData:
     # Seconds the device clock gains/loses per day, averaged over syncs.
     drift_rate_per_day: float | None = None
     next_sync: datetime | None = None
+    # What the scheduler is currently doing, so the next_sync sensor can say
+    # why its value is where it is — or that there is deliberately no value.
+    auto_sync_mode: str | None = None
+    sync_interval_days: float | None = None
     failure_count: int = 0
     last_failure: datetime | None = None
     consecutive_auto_failures: int = 0
@@ -265,6 +269,8 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             clock_drift=previous.clock_drift,
             drift_rate_per_day=previous.drift_rate_per_day,
             next_sync=previous.next_sync,
+            auto_sync_mode=previous.auto_sync_mode,
+            sync_interval_days=previous.sync_interval_days,
             failure_count=0,
             last_failure=previous.last_failure,
             consecutive_auto_failures=previous.consecutive_auto_failures,

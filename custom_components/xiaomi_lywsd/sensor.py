@@ -67,6 +67,12 @@ DIAGNOSTIC_SENSORS: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
+        key="next_sync",
+        translation_key="next_sync",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
         key="failure_count",
         translation_key="failure_count",
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -146,24 +152,33 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, object] | None:
-        """Clock health rides on last_sync instead of separate entities.
+        """Clock health rides on the two sync timestamps.
 
-        Drift is only meaningful next to the sync it was measured at, and a
-        standalone sensor added a second row to every dashboard for a number
-        nobody graphs.
+        Drift is only meaningful next to the sync it was measured at, and the
+        schedule only makes sense next to the mode that produced it — neither
+        earns an entity of its own.
         """
-        if self.entity_description.key != "last_sync":
-            return None
         data: LywsdData = self._lywsd.data
-        return {
-            "drift_seconds": data.clock_drift,
-            "drift_seconds_per_day": (
-                round(data.drift_rate_per_day, 3)
-                if data.drift_rate_per_day is not None
-                else None
-            ),
-            "next_sync": data.next_sync,
-        }
+        rate = (
+            round(data.drift_rate_per_day, 3)
+            if data.drift_rate_per_day is not None
+            else None
+        )
+        if self.entity_description.key == "last_sync":
+            return {
+                "drift_seconds": data.clock_drift,
+                "drift_seconds_per_day": rate,
+            }
+        if self.entity_description.key == "next_sync":
+            # An empty state means automatic sync is off, so say so outright
+            # rather than leaving "unknown" to be interpreted.
+            mode = data.auto_sync_mode
+            return {
+                "auto_sync": "off" if mode in (None, "0") else mode,
+                "interval_days": data.sync_interval_days,
+                "drift_seconds_per_day": rate,
+            }
+        return None
 
 
 class LywsdConnectionDurationSensor(

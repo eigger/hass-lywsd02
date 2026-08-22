@@ -84,6 +84,9 @@
       "last_sync": {
         "name": "마지막 동기화"
       },
+      "next_sync": {
+        "name": "다음 시간 동기화"
+      },
       "failure_count": {
         "name": "실패 횟수"
       },

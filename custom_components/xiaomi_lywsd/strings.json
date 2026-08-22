@@ -84,6 +84,9 @@
       "last_sync": {
         "name": "Last sync"
       },
+      "next_sync": {
+        "name": "Next time sync"
+      },
       "failure_count": {
         "name": "Failure count"
       },

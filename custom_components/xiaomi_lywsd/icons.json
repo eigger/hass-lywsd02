@@ -34,6 +34,9 @@
       "last_sync": {
         "default": "mdi:clock-outline"
       },
+      "next_sync": {
+        "default": "mdi:clock-fast"
+      },
       "failure_count": {
         "default": "mdi:alert-circle"
       },

@@ -81,14 +81,27 @@ than retrying every minute.
 
 ### Clock diagnostics
 
-`sensor.*_last_sync` carries the clock health as attributes rather than separate
-entities:
+Two timestamp sensors, each carrying its context as attributes rather than
+spawning more entities:
+
+`sensor.*_last_sync` — when the clock was last corrected.
 
 | Attribute | Meaning |
 | --- | --- |
-| `drift_seconds` | Error measured just before the last correction |
+| `drift_seconds` | Error measured just before that correction |
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
-| `next_sync` | When the next automatic sync is scheduled |
+
+`sensor.*_next_sync` — when the next automatic sync is due. **Empty means
+automatic sync is off**, which the attributes state outright.
+
+| Attribute | Meaning |
+| --- | --- |
+| `auto_sync` | `off`, `auto`, or the configured number of days |
+| `interval_days` | The cadence in effect — from the drift rate in Automatic mode, from the dropdown otherwise. Unchanged by a failure backoff |
+| `drift_seconds_per_day` | The rate the interval was derived from |
+
+So `state_attr('sensor.lywsd02_xxxx_next_sync', 'auto_sync') == 'off'` is enough
+to alert on a device whose clock is no longer being corrected.
 
 ## Upgrading from 0.1.x
 
