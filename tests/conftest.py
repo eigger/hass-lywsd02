@@ -144,7 +144,28 @@ sys.modules["homeassistant.helpers.issue_registry"] = MagicMock()
 sys.modules["homeassistant.helpers.restore_state"] = MagicMock()
 sys.modules["homeassistant.helpers.update_coordinator"] = MagicMock()
 sys.modules["homeassistant.util"] = MagicMock()
-sys.modules["homeassistant.util.dt"] = MagicMock()
+_ha_util_dt = MagicMock()
+
+
+def _parse_datetime(value, *, raise_on_error: bool = False):
+    """Real parser — store.py round-trips timestamps through it."""
+    import datetime as _dt
+
+    if isinstance(value, _dt.datetime):
+        return value
+    try:
+        return _dt.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        if raise_on_error:
+            raise
+        return None
+
+
+_ha_util_dt.parse_datetime = _parse_datetime
+sys.modules["homeassistant.util.dt"] = _ha_util_dt
+# `from homeassistant.util import dt as dt_util` reads the attribute off the
+# parent module object, which sys.modules alone does not populate.
+sys.modules["homeassistant.util"].dt = _ha_util_dt
 
 # Do NOT MagicMock helpers.service wholesale — that hides missing symbols and
 # lets production code import names that do not exist on current HA cores.
@@ -180,6 +201,34 @@ def _extract_from_selection(hass, selection, expand_group: bool = True):
     return selected
 
 
+# Real module with an in-memory Store so persistence is actually exercised
+# (a MagicMock would make every save/load silently succeed and prove nothing).
+_ha_storage = types.ModuleType("homeassistant.helpers.storage")
+
+
+class _FakeStore:
+    """Minimal Store: per-key in-memory blob, shared across instances."""
+
+    _blobs: dict = {}
+
+    def __init__(self, hass, version, key, **kwargs):
+        self.hass = hass
+        self.version = version
+        self.key = key
+
+    async def async_load(self):
+        return _FakeStore._blobs.get(self.key)
+
+    async def async_save(self, data):
+        _FakeStore._blobs[self.key] = data
+
+    async def async_remove(self):
+        _FakeStore._blobs.pop(self.key, None)
+
+
+_ha_storage.Store = _FakeStore
+sys.modules["homeassistant.helpers.storage"] = _ha_storage
+
 _ha_target = types.ModuleType("homeassistant.helpers.target")
 _ha_target.TargetSelection = _TargetSelection
 _ha_target.async_extract_referenced_entity_ids = _extract_from_selection
@@ -191,6 +240,7 @@ sys.modules["homeassistant.helpers.target"] = _ha_target
 _helpers = sys.modules["homeassistant.helpers"]
 _helpers.service = _ha_service
 _helpers.target = _ha_target
+_helpers.storage = _ha_storage
 sys.modules["homeassistant"].helpers = _helpers
 
 

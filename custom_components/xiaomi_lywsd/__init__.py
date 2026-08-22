@@ -25,7 +25,7 @@ from homeassistant.core import (
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
     async_create_issue,
@@ -34,10 +34,15 @@ from homeassistant.helpers.issue_registry import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AUTO_SYNC_HOURS,
+    AUTO_SYNC_DISABLED,
+    AUTO_SYNC_RETRY_BASE_SECONDS,
+    AUTO_SYNC_RETRY_MAX_SECONDS,
     CONF_RETRY_COUNT,
-    DEFAULT_AUTO_SYNC_HOURS,
     DEFAULT_RETRY_COUNT,
+    STARTUP_SYNC_DELAY_SECONDS,
+    auto_sync_choice,
+    auto_sync_interval_days,
+    auto_sync_tolerance_seconds,
     DOMAIN,
     LOCK,
     MANUFACTURER,
@@ -95,6 +100,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
         name=f"LYWSD02 {identifier}",
     )
 
+    _async_remove_retired_entities(hass, entry, identifier)
+
+    # Durable state first: the auto-sync scheduler needs last_sync before any
+    # entity exists, and the selects need their restored values.
+    await coordinator.async_load_persisted()
+
     # First refresh may fail if the device is briefly out of range — do not
     # abort setup; the next poll interval will recover. Clock-only mode has no
     # poll interval and must not open a BLE session at setup.
@@ -113,6 +124,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
     _async_setup_auto_sync(hass, entry)
 
     return True
+
+
+# Entities dropped in 0.2.0. Without this they linger as permanently
+# unavailable rows in every existing install.
+_RETIRED_UNIQUE_ID_SUFFIXES = ("clock_drift",)
+
+
+def _async_remove_retired_entities(
+    hass: HomeAssistant, entry: LywsdConfigEntry, identifier: str
+) -> None:
+    """Drop registry entries for entities this version no longer creates."""
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    for suffix in _RETIRED_UNIQUE_ID_SUFFIXES:
+        unique_id = f"xiaomi_lywsd_{identifier}_{suffix}"
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if entity_id is None:
+            continue
+        _LOGGER.debug("Removing retired entity %s", entity_id)
+        registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:
@@ -261,13 +293,13 @@ async def _service_sync_time(
 
     async def _op(client, device):
         result = await device.set_time(client, dt_util.now(), offset)
-        coordinator.data.last_sync = dt_util.now()
-        coordinator.data.clock_drift = result.drift_seconds
+        coordinator.note_sync(result.drift_seconds, dt_util.now())
         return result
 
     try:
         await async_execute(hass, entry, _op)
         coordinator.record_action_success()
+        await coordinator.async_after_sync()
     except Exception as err:
         coordinator.record_failure()
         if isinstance(err, LywsdVerifyError):
@@ -290,6 +322,7 @@ async def _service_read_state(
     try:
         await async_execute(hass, entry, _op)
         coordinator.record_action_success()
+        await coordinator.async_save_persisted()
     except Exception:
         coordinator.record_failure()
         raise
@@ -457,36 +490,125 @@ def _clear_proxy_issues(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
     async_delete_issue(hass, DOMAIN, f"proxy_not_active_{entry.entry_id}")
 
 
-def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
-    options = {**entry.data, **entry.options}
-    hours = int(options.get(CONF_AUTO_SYNC_HOURS, DEFAULT_AUTO_SYNC_HOURS))
-    if hours <= 0:
+def _auto_sync_interval(coordinator, options: dict) -> timedelta:
+    """How long to wait between automatic clock writes."""
+    choice = auto_sync_choice(options)
+    days = auto_sync_interval_days(
+        choice,
+        coordinator.data.drift_rate_per_day,
+        auto_sync_tolerance_seconds(options),
+    )
+    return timedelta(days=days)
+
+
+async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+    """One quiet automatic sync. Never raises into the scheduler."""
+    coordinator = entry.runtime_data
+
+    async def _op(client, device):
+        now = dt_util.now()
+        utcoffset = now.utcoffset()
+        offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
+        result = await device.set_time(client, now, offset)
+        coordinator.note_sync(result.drift_seconds, dt_util.now())
+        coordinator.data.consecutive_auto_failures = 0
+        return result
+
+    try:
+        await async_execute(hass, entry, _op, wrap_errors=False)
+    except Exception as err:
+        coordinator.data.consecutive_auto_failures += 1
+        coordinator.record_failure()
+        _LOGGER.debug("auto sync failed for %s: %s", coordinator.address, err)
+        if coordinator.data.consecutive_auto_failures == 3:
+            _LOGGER.warning(
+                "Automatic time sync failed 3 times for %s", coordinator.address
+            )
         return
 
-    async def _tick(now: datetime) -> None:
-        coordinator = entry.runtime_data
+    coordinator.record_action_success()
+    await coordinator.async_save_persisted()
 
-        async def _op(client, device):
-            utcoffset = dt_util.now().utcoffset()
-            offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
-            result = await device.set_time(client, dt_util.now(), offset)
-            coordinator.data.last_sync = dt_util.now()
-            coordinator.data.clock_drift = result.drift_seconds
-            coordinator.data.consecutive_auto_failures = 0
-            return result
 
-        try:
-            await async_execute(hass, entry, _op, wrap_errors=False)
-            coordinator.record_action_success()
-        except Exception as err:
-            coordinator.data.consecutive_auto_failures += 1
-            coordinator.record_failure()
-            _LOGGER.debug("auto sync failed for %s: %s", coordinator.address, err)
-            if coordinator.data.consecutive_auto_failures == 3:
-                _LOGGER.warning(
-                    "Automatic time sync failed 3 times for %s",
-                    coordinator.address,
-                )
+def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+    """Arm a restart-safe automatic sync.
 
-    unsub = async_track_time_interval(hass, _tick, timedelta(hours=hours))
-    entry.async_on_unload(unsub)
+    ``async_track_time_interval`` restarts its countdown on every Home Assistant
+    restart, so a 30-day cycle would never fire on a box that reboots weekly.
+    Scheduling a single point in time derived from the *persisted* last sync
+    makes the interval survive restarts, and a sync that came due while Home
+    Assistant was down runs shortly after startup instead of being skipped.
+    """
+    coordinator = entry.runtime_data
+    options = {**entry.data, **entry.options}
+
+    if auto_sync_choice(options) == AUTO_SYNC_DISABLED:
+        coordinator.data.next_sync = None
+        coordinator.reschedule_auto_sync = None
+        return
+
+    state: dict[str, Callable[[], None] | None] = {"unsub": None}
+
+    def _cancel() -> None:
+        if state["unsub"] is not None:
+            state["unsub"]()
+            state["unsub"] = None
+
+    def _schedule(when: datetime) -> None:
+        _cancel()
+        coordinator.data.next_sync = when
+        state["unsub"] = async_track_point_in_time(hass, _fire, when)
+
+    def _due_at() -> datetime:
+        now = dt_util.now()
+        last_sync = coordinator.data.last_sync
+        if last_sync is None:
+            # Never synced (fresh install, or the clock was never corrected) —
+            # do it right after startup rather than a full interval from now.
+            return now + timedelta(seconds=STARTUP_SYNC_DELAY_SECONDS)
+        due = last_sync + _auto_sync_interval(coordinator, options)
+        if due <= now:
+            due = now + timedelta(seconds=STARTUP_SYNC_DELAY_SECONDS)
+        return due
+
+    def _retry_at() -> datetime:
+        """Exponential backoff while the device stays unreachable."""
+        failures = max(1, coordinator.data.consecutive_auto_failures)
+        delay = min(
+            AUTO_SYNC_RETRY_MAX_SECONDS,
+            AUTO_SYNC_RETRY_BASE_SECONDS * (2 ** (failures - 1)),
+        )
+        return dt_util.now() + timedelta(seconds=delay)
+
+    async def _fire(_now: datetime) -> None:
+        state["unsub"] = None
+        await _run_auto_sync(hass, entry)
+        if coordinator.data.consecutive_auto_failures:
+            # last_sync did not move, so _due_at() would be permanently overdue
+            # and retry every startup-delay — back off instead.
+            _schedule(_retry_at())
+        else:
+            _schedule(_due_at())
+
+    def _reschedule() -> None:
+        _schedule(_due_at())
+
+    coordinator.reschedule_auto_sync = _reschedule
+
+    def _teardown() -> None:
+        coordinator.reschedule_auto_sync = None
+        _cancel()
+
+    entry.async_on_unload(_teardown)
+    _schedule(_due_at())
+
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+    """Delete persisted sync state when the device is removed."""
+    from .store import LywsdStore
+
+    try:
+        await LywsdStore(hass, entry.entry_id).async_remove()
+    except Exception as err:  # pragma: no cover - defensive
+        _LOGGER.debug("store removal failed for %s: %s", entry.entry_id, err)

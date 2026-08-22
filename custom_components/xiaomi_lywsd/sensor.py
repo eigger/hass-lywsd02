@@ -64,14 +64,6 @@ DIAGNOSTIC_SENSORS: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
-        key="clock_drift",
-        translation_key="clock_drift",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-    ),
-    SensorEntityDescription(
         key="failure_count",
         translation_key="failure_count",
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -143,6 +135,27 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         data: LywsdData = self._lywsd.data
         return getattr(data, self.entity_description.key, None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object] | None:
+        """Clock health rides on last_sync instead of separate entities.
+
+        Drift is only meaningful next to the sync it was measured at, and a
+        standalone sensor added a second row to every dashboard for a number
+        nobody graphs.
+        """
+        if self.entity_description.key != "last_sync":
+            return None
+        data: LywsdData = self._lywsd.data
+        return {
+            "drift_seconds": data.clock_drift,
+            "drift_seconds_per_day": (
+                round(data.drift_rate_per_day, 3)
+                if data.drift_rate_per_day is not None
+                else None
+            ),
+            "next_sync": data.next_sync,
+        }
 
 
 class LywsdConnectionDurationSensor(

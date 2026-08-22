@@ -6,6 +6,7 @@ from .base import (
     ClimateReading,
     LywsdDevice,
     LywsdDeviceError,
+    LywsdUnsupportedError,
     LywsdVerifyError,
     SyncResult,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "ClimateReading",
     "LywsdDevice",
     "LywsdDeviceError",
+    "LywsdUnsupportedError",
     "LywsdVerifyError",
     "SyncResult",
     "Lywsd02mmc",

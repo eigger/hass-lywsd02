@@ -1,4 +1,4 @@
-"""Select entity for display units."""
+"""Select entities: display units and 12h/24h clock mode."""
 
 from __future__ import annotations
 
@@ -13,15 +13,17 @@ from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceIn
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import async_execute
-from .const import MANUFACTURER, MODEL
-from .device import LywsdVerifyError
+from .const import MANUFACTURER, MODEL, TIME_FORMAT_OPTIONS
+from .device import LywsdUnsupportedError, LywsdVerifyError
 from .types import LywsdConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 OPTIONS = ["celsius", "fahrenheit"]
+TIME_FORMATS = list(TIME_FORMAT_OPTIONS)
 
 
 async def async_setup_entry(
@@ -29,25 +31,31 @@ async def async_setup_entry(
     entry: LywsdConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities([LywsdDisplayUnitsSelect(hass, entry)])
+    async_add_entities(
+        [
+            LywsdDisplayUnitsSelect(hass, entry),
+            LywsdTimeFormatSelect(hass, entry),
+        ]
+    )
 
 
-class LywsdDisplayUnitsSelect(CoordinatorEntity, RestoreEntity, SelectEntity):
-    """°C / °F select — single source of truth: coordinator.data.units."""
+class _LywsdSelectBase(CoordinatorEntity, RestoreEntity, SelectEntity):
+    """Shared plumbing: device info, availability, optimistic writes."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "display_units"
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_options = OPTIONS
 
-    def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+    def __init__(
+        self, hass: HomeAssistant, entry: LywsdConfigEntry, key: str
+    ) -> None:
         self.hass = hass
         self._entry = entry
         coordinator = entry.runtime_data
         super().__init__(coordinator)
         self._address = coordinator.address
         self._identifier = coordinator.identifier
-        self._attr_unique_id = f"xiaomi_lywsd_{self._identifier}_display_units"
+        self._attr_translation_key = key
+        self._attr_unique_id = f"xiaomi_lywsd_{self._identifier}_{key}"
         self._attr_device_info = DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, self._address)},
             name=f"LYWSD02 {self._identifier}",
@@ -64,6 +72,15 @@ class LywsdDisplayUnitsSelect(CoordinatorEntity, RestoreEntity, SelectEntity):
             is not None
         )
 
+
+class LywsdDisplayUnitsSelect(_LywsdSelectBase):
+    """°C / °F — single source of truth: coordinator.data.units."""
+
+    _attr_options = OPTIONS
+
+    def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+        super().__init__(hass, entry, "display_units")
+
     @property
     def current_option(self) -> str | None:
         return self._entry.runtime_data.data.units
@@ -77,8 +94,8 @@ class LywsdDisplayUnitsSelect(CoordinatorEntity, RestoreEntity, SelectEntity):
             self._entry.runtime_data.data.units = last_state.state
 
     async def async_select_option(self, option: str) -> None:
-        previous = self._entry.runtime_data.data.units
         coordinator = self._entry.runtime_data
+        previous = coordinator.data.units
 
         async def _op(client, device):
             await device.set_units(client, option)
@@ -88,6 +105,7 @@ class LywsdDisplayUnitsSelect(CoordinatorEntity, RestoreEntity, SelectEntity):
         try:
             await async_execute(self.hass, self._entry, _op)
             coordinator.record_action_success()
+            await coordinator.async_save_persisted()
         except Exception as err:
             coordinator.data.units = previous
             coordinator.record_failure()
@@ -98,3 +116,65 @@ class LywsdDisplayUnitsSelect(CoordinatorEntity, RestoreEntity, SelectEntity):
             if isinstance(err, HomeAssistantError):
                 raise
             raise HomeAssistantError(f"Failed to set units: {err}") from err
+
+
+class LywsdTimeFormatSelect(_LywsdSelectBase):
+    """12h / 24h E-Ink clock mode.
+
+    The device gives no read-back for this setting, so the state is optimistic
+    and restored across restarts. Not every firmware revision implements the
+    command; a device that rejects it surfaces a clear error instead of failing
+    silently.
+    """
+
+    _attr_options = TIME_FORMATS
+
+    def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+        super().__init__(hass, entry, "time_format")
+
+    @property
+    def current_option(self) -> str | None:
+        return self._entry.runtime_data.data.time_format
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._entry.runtime_data.data.time_format in TIME_FORMATS:
+            return
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in TIME_FORMATS:
+            self._entry.runtime_data.data.time_format = last_state.state
+
+    async def async_select_option(self, option: str) -> None:
+        coordinator = self._entry.runtime_data
+        previous = coordinator.data.time_format
+        now = dt_util.now()
+        utcoffset = now.utcoffset()
+        tz_offset_hours = (
+            int(utcoffset.total_seconds() // 3600) if utcoffset else 0
+        )
+
+        async def _op(client, device):
+            # set_time_format rewrites the clock on the same connection, so a
+            # firmware that mistakes the mode command for a time write cannot
+            # leave the display stuck in 1970.
+            result = await device.set_time_format(
+                client, option, now, tz_offset_hours
+            )
+            coordinator.data.time_format = option
+            coordinator.note_sync(result.drift_seconds, dt_util.now())
+            return option
+
+        try:
+            await async_execute(self.hass, self._entry, _op)
+            coordinator.record_action_success()
+            await coordinator.async_after_sync()
+        except Exception as err:
+            coordinator.data.time_format = previous
+            coordinator.record_failure()
+            if isinstance(err, LywsdUnsupportedError):
+                raise HomeAssistantError(
+                    "이 기기의 펌웨어는 12/24시간 전환을 지원하지 않습니다"
+                ) from err
+            if isinstance(err, HomeAssistantError):
+                raise
+            raise HomeAssistantError(f"Failed to set clock mode: {err}") from err

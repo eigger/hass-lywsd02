@@ -36,13 +36,15 @@
           "scan_interval": "Poll interval (minutes)",
           "climate_sensors": "Enable temperature / humidity / battery sensors",
           "retry_count": "BLE write retry count",
-          "auto_sync_hours": "Automatic time sync interval"
+          "auto_sync": "Automatic time sync",
+          "auto_sync_tolerance": "Automatic mode: tolerated clock error (seconds)"
         },
         "data_description": {
           "scan_interval": "How often to connect and read climate over GATT when climate sensors are enabled. Default 30 minutes (CR2032). Range 2–60 minutes.",
           "climate_sensors": "Off by default (clock-only). When on, creates climate entities and starts periodic GATT polling. Sensors become available after the first successful reading.",
           "retry_count": "Number of connection attempts before failing a write.",
-          "auto_sync_hours": "How often to write the Home Assistant clock to the device. Default off. Shorter than 24 hours is not offered."
+          "auto_sync": "How often to write the Home Assistant clock to the device. Automatic derives the interval from the drift measured between syncs, so an accurate clock stretches to months and a sloppy one syncs more often. The schedule is stored, so it survives a Home Assistant restart.",
+          "auto_sync_tolerance": "Only used in Automatic mode. The interval is this error divided by the observed drift per day, clamped to 1–180 days."
         }
       }
     }
@@ -60,6 +62,13 @@
           "celsius": "Celsius (°C)",
           "fahrenheit": "Fahrenheit (°F)"
         }
+      },
+      "time_format": {
+        "name": "Clock mode (E-Ink)",
+        "state": {
+          "12h": "12-hour",
+          "24h": "24-hour"
+        }
       }
     },
     "sensor": {
@@ -74,9 +83,6 @@
       },
       "last_sync": {
         "name": "Last sync"
-      },
-      "clock_drift": {
-        "name": "Clock drift"
       },
       "failure_count": {
         "name": "Failure count"

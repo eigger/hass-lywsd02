@@ -16,6 +16,7 @@ from .base import (
     ClimateReading,
     LywsdDevice,
     LywsdDeviceError,
+    LywsdUnsupportedError,
     LywsdVerifyError,
     SyncResult,
 )
@@ -47,6 +48,19 @@ CODE_TO_UNITS = {
 TIME_VERIFY_TOLERANCE = 2.0
 WRITE_RESPONSE = True  # 미검증: community clients use withResponse=True
 DEFAULT_CLIMATE_TIMEOUT = 15.0
+
+# 12h/24h shares the clock characteristic and is told apart by payload length:
+# 5 bytes (<Ib) sets the wall clock, 7 bytes (<IHB) sets the display mode.
+# Source: ashald/home-assistant-lywsd02. Support varies by firmware revision,
+# and the epoch field is zero — a device that reads it as a time write would
+# jump to 1970, so callers must restore the clock afterwards.
+TIME_FORMAT_12H_PAYLOAD = struct.pack("<IHB", 0, 0, 0xAA)
+TIME_FORMAT_24H_PAYLOAD = struct.pack("<IHB", 0, 0, 0x00)
+
+TIME_FORMAT_TO_CODE = {
+    "12h": TIME_FORMAT_12H_PAYLOAD,
+    "24h": TIME_FORMAT_24H_PAYLOAD,
+}
 
 
 def encode_time(epoch: int, tz_offset_hours: int) -> bytes:
@@ -84,6 +98,14 @@ def decode_units(payload: bytes) -> str:
         raise LywsdDeviceError(
             f"unknown units payload hex={bytes(payload).hex()} raw={payload!r}"
         ) from err
+
+
+def encode_time_format(time_format: str) -> bytes:
+    """Encode the 12h/24h display mode command."""
+    try:
+        return TIME_FORMAT_TO_CODE[time_format]
+    except KeyError as err:
+        raise ValueError(f"unknown time format: {time_format}") from err
 
 
 def decode_climate(payload: bytes) -> ClimateReading:
@@ -153,6 +175,26 @@ class Lywsd02mmc(LywsdDevice):
             read_back_epoch=after_epoch,
             drift_seconds=drift_seconds,
         )
+
+    async def set_time_format(
+        self, client, time_format: str, when: datetime, tz_offset_hours: int
+    ) -> SyncResult:
+        """Write the 12h/24h mode, then rewrite the wall clock.
+
+        The mode command carries a zero epoch in the same characteristic used
+        for time. On firmware that does not recognise the 7-byte form the write
+        either fails outright (raised as unsupported) or is taken as a time
+        write — hence the unconditional re-sync on the same connection, which
+        repairs the clock before the caller ever sees it.
+        """
+        payload = encode_time_format(time_format)
+        try:
+            await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
+        except Exception as err:
+            raise LywsdUnsupportedError(
+                f"device rejected the {time_format} clock mode command: {err}"
+            ) from err
+        return await self.set_time(client, when, tz_offset_hours)
 
     async def get_units(self, client) -> str:
         raw = await client.read_gatt_char(UUID_UNITS)

@@ -77,14 +77,15 @@ class LywsdSyncTimeButton(ButtonEntity):
             result = await device.set_time(
                 client, dt_util.now(), tz_offset_hours
             )
-            coord = self._entry.runtime_data
-            coord.data.last_sync = dt_util.now()
-            coord.data.clock_drift = result.drift_seconds
+            self._entry.runtime_data.note_sync(
+                result.drift_seconds, dt_util.now()
+            )
             return result
 
         try:
             await async_execute(self.hass, self._entry, _op)
             self._entry.runtime_data.record_action_success()
+            await self._entry.runtime_data.async_after_sync()
         except Exception as err:
             self._entry.runtime_data.record_failure()
             _reraise_action_error("sync time", err)

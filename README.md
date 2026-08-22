@@ -56,7 +56,36 @@ bluetooth_proxy:
 - **Poll interval** (default **30 minutes**, range 2–60) — only used when
   climate sensors are enabled. LYWSD02 uses a **CR2032** coin cell; BLE
   connect time dominates drain
-- BLE retries, automatic time sync (default **off** / 24h / 7d)
+- **Automatic time sync** (default **Automatic**) — off, every 1 / 7 / 30 / 90 /
+  180 days, or drift based
+- **Tolerated clock error** (default **60 s**) — Automatic mode only
+- BLE retry count
+
+### Automatic (drift based) sync
+
+Each sync measures how far the clock had wandered since the previous one, which
+gives a drift rate in seconds per day. The next interval is the tolerated error
+divided by that rate, clamped to 1–180 days: an accurate unit stretches out to
+months on its own, a sloppy one keeps a short cycle. Until two syncs have been
+observed it falls back to 7 days.
+
+The schedule is **stored on disk**, so restarting Home Assistant does not restart
+the countdown — a 30-day interval still fires on day 30 even on a box that
+reboots weekly. A sync that came due while Home Assistant was down runs shortly
+after startup. Repeated failures back off exponentially (30 min → 6 h) rather
+than retrying every minute.
+
+### Clock diagnostics
+
+`sensor.*_last_sync` carries the clock health as attributes rather than separate
+entities:
+
+| Attribute | Meaning |
+| --- | --- |
+| `drift_seconds` | Error measured just before the last correction |
+| `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
+| `next_sync` | When the next automatic sync is scheduled |
+
 ## Development
 
 ```bash

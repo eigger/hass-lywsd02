@@ -269,9 +269,6 @@ def test_diagnostic_sensors_available_when_poll_failed():
 
     temp = LywsdSensor(coord, CLIMATE_SENSORS[0])
     last_sync = LywsdSensor(coord, DIAGNOSTIC_SENSORS[0])
-    clock_drift = LywsdSensor(
-        coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "clock_drift")
-    )
     failure_count = LywsdSensor(
         coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "failure_count")
     )
@@ -282,9 +279,33 @@ def test_diagnostic_sensors_available_when_poll_failed():
     assert temp.available is False
     assert last_sync.available is True
     assert last_sync.native_value == coord.data.last_sync
-    assert clock_drift.available is True
-    assert clock_drift.native_value == -12.5
+    # Drift now rides on last_sync instead of its own entity.
+    attrs = last_sync.extra_state_attributes
+    assert attrs["drift_seconds"] == -12.5
+    assert failure_count.extra_state_attributes is None
     assert failure_count.available is True
     assert failure_count.native_value == 2
     assert last_failure.available is True
     assert last_failure.native_value == coord.data.last_failure
+
+
+def test_retired_clock_drift_entity_is_removed():
+    """0.1.x created a clock_drift sensor; it must not linger as unavailable."""
+    from custom_components.xiaomi_lywsd import _async_remove_retired_entities
+
+    hass = MagicMock()
+    entry = MagicMock()
+    registry = MagicMock()
+    registry.async_get_entity_id.return_value = "sensor.lywsd02_16c5c4_clock_drift"
+
+    with patch(
+        "homeassistant.helpers.entity_registry.async_get", return_value=registry
+    ):
+        _async_remove_retired_entities(hass, entry, "1638C5C4")
+
+    registry.async_get_entity_id.assert_called_once_with(
+        "sensor", "xiaomi_lywsd", "xiaomi_lywsd_1638C5C4_clock_drift"
+    )
+    registry.async_remove.assert_called_once_with(
+        "sensor.lywsd02_16c5c4_clock_drift"
+    )
