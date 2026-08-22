@@ -1,0 +1,116 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LYWSD02 기기 선택",
+        "description": "이 통합은 GATT로 온·습도·배터리를 읽고 E-Ink 시계를 동기화합니다. 이 모델은 보통 코어 Xiaomi BLE가 온습도를 제공하지 않습니다(MiBeacon object_include=0).",
+        "data": {
+          "address": "기기"
+        }
+      },
+      "bluetooth_confirm": {
+        "description": "{name}을(를) 설정할까요?"
+      },
+      "manual": {
+        "title": "MAC 주소 입력",
+        "description": "발견된 기기가 없습니다. Bluetooth MAC 주소(AA:BB:CC:DD:EE:FF)를 입력하세요. 지금 범위 안에 없어도 됩니다.",
+        "data": {
+          "address": "MAC 주소"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "이미 설정된 기기입니다",
+      "not_supported": "지원하는 LYWSD02 / LYWSD02MMC 기기가 아닙니다",
+      "no_devices_found": "LYWSD02 기기를 찾지 못했습니다"
+    },
+    "error": {
+      "invalid_mac": "잘못된 MAC 주소입니다. AA:BB:CC:DD:EE:FF 형식을 사용하세요."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xiaomi LYWSD 옵션",
+        "data": {
+          "scan_interval": "폴링 주기",
+          "climate_sensors": "온도 / 습도 / 배터리 센서 생성",
+          "retry_count": "BLE 쓰기 재시도 횟수",
+          "auto_sync_hours": "자동 시간 동기화 주기"
+        },
+        "data_description": {
+          "scan_interval": "GATT로 온습도를 읽기 위해 연결하는 주기입니다. 최소 120초.",
+          "climate_sensors": "코어 Xiaomi BLE가 이미 온습도를 제공하고 시계 제어만 필요할 때 끄세요.",
+          "retry_count": "쓰기 실패로 판정하기 전 연결 시도 횟수입니다.",
+          "auto_sync_hours": "0 = 비활성. 배터리 보호를 위해 24시간 미만 옵션은 제공하지 않습니다."
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "sync_time": {
+        "name": "시간 동기화"
+      }
+    },
+    "select": {
+      "display_units": {
+        "name": "표시 단위 (E-Ink)",
+        "state": {
+          "celsius": "섭씨 (°C)",
+          "fahrenheit": "화씨 (°F)"
+        }
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "온도"
+      },
+      "humidity": {
+        "name": "습도"
+      },
+      "battery": {
+        "name": "배터리"
+      },
+      "last_sync": {
+        "name": "마지막 동기화"
+      },
+      "clock_drift": {
+        "name": "시계 오차"
+      },
+      "failure_count": {
+        "name": "실패 횟수"
+      },
+      "last_failure": {
+        "name": "마지막 실패"
+      }
+    }
+  },
+  "services": {
+    "sync_time": {
+      "name": "시간 동기화",
+      "description": "E-Ink 시계에 현재 시각을 씁니다.",
+      "fields": {
+        "timezone_offset": {
+          "name": "타임존 오프셋 (시간)",
+          "description": "선택 사항. UTC 기준 시간 단위 오프셋(-12~14). 미지정 시 Home Assistant 타임존을 사용합니다."
+        }
+      }
+    },
+    "read_state": {
+      "name": "상태 읽기",
+      "description": "한 번 연결해 기기의 표시 단위를 새로고침합니다.",
+      "fields": {}
+    }
+  },
+  "issues": {
+    "no_connectable_scanner": {
+      "title": "연결 가능한 Bluetooth 스캐너 없음",
+      "description": "Xiaomi LYWSD가 온습도 폴링과 시간/단위 쓰기를 하려면 연결 가능한 Bluetooth 어댑터 또는 `active: true`인 ESPHome Bluetooth 프록시가 필요합니다.\n\n```yaml\nesp32_ble_tracker:\nbluetooth_proxy:\n  active: true\n```"
+    },
+    "proxy_not_active": {
+      "title": "Bluetooth 프록시가 active가 아님",
+      "description": "기기가 비연결 스캐너로만 보입니다. ESPHome Bluetooth 프록시에서 active 연결을 켜세요.\n\n```yaml\nesp32_ble_tracker:\nbluetooth_proxy:\n  active: true\n```"
+    }
+  }
+}
