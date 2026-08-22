@@ -126,14 +126,13 @@ class LywsdDisplayUnitsSelect(_LywsdSelectBase):
 class LywsdTimeFormatSelect(_LywsdSelectBase):
     """12h / 24h E-Ink clock mode.
 
-    Experimental: the 0xAA/0x00 payloads are still unverified against hardware
-    (see docs/protocol.md), the device offers no read-back, and firmware that
-    simply ignores the command is indistinguishable from success. Disabled by
-    default until measured; state is optimistic and restored across restarts.
+    Verified on LYWSD02MMC (device_id 0x2542) — see docs/protocol.md. Support
+    still varies by firmware revision, but a device that refuses the command now
+    says so provably, so the entity is created enabled. There is no read-back,
+    so state is optimistic and restored across restarts.
     """
 
     _attr_options = TIME_FORMATS
-    _attr_entity_registry_enabled_default = False
 
     def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
         super().__init__(hass, entry, "time_format")

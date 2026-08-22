@@ -105,11 +105,20 @@ def auto_sync_interval_days(
 
     Adaptive mode divides the tolerated error by the observed drift rate, so a
     clock that barely drifts stretches out to months while a sloppy one keeps a
-    short cycle. Falls back to the bootstrap interval until a rate is known.
+    short cycle. Falls back to the bootstrap interval only while no rate has
+    been measured yet.
     """
     if choice == AUTO_SYNC_ADAPTIVE:
-        rate = abs(drift_rate_per_day) if drift_rate_per_day else 0.0
-        days = AUTO_SYNC_BOOTSTRAP_DAYS if rate < 1e-6 else tolerance / rate
+        if drift_rate_per_day is None:
+            # Nothing measured yet — two syncs are needed for a rate.
+            days = AUTO_SYNC_BOOTSTRAP_DAYS
+        else:
+            rate = abs(drift_rate_per_day)
+            # A measured zero means the clock held to within the device's
+            # one-second resolution over the whole interval, which is the best
+            # result there is. Treating it like "unknown" would put an accurate
+            # clock on a shorter cycle than a slightly worse one.
+            days = AUTO_SYNC_MAX_DAYS if rate < 1e-6 else tolerance / rate
     else:
         try:
             days = float(choice)
