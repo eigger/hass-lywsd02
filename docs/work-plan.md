@@ -239,18 +239,21 @@ class LywsdData:
 
 ### 3.2 스캔 주기
 
-- `CONF_SCAN_INTERVAL`, `DEFAULT_SCAN_INTERVAL = 600` (10분). niimbot과 같은 기본값.
+- `CONF_SCAN_INTERVAL`, `DEFAULT_SCAN_INTERVAL = 1800` (30분). CR2032 코인셀 기준 보수적 기본값.
 - 하한 **120초**. 그 이하는 셀렉터에서 선택할 수 없게 막는다. E-Ink 시계 자체가 화면을 1분 단위로
   갱신하므로 그보다 촘촘히 읽을 이유가 없고, 배터리만 깎는다.
-- 이 기기는 AAA 2본이라 코인셀 기기보다 여유가 있지만, BLE 연결은 광고 수신보다 훨씬 비싸다.
-  README에 "10분 주기에서 배터리 수명이 얼마나 나오는지는 아직 장기 데이터가 없다"고 명시한다.
+- **LYWSD02 / LYWSD02MMC는 CR2032 코인셀**이다 (AAA가 아님). BLE 연결 유지 시간이 곧 소모이므로
+  폴링 예산을 타이트하게 잡는다. README에 장기 수명 데이터가 아직 없다고 명시한다.
+- `CONF_CLIMATE_SENSORS=False`면 `update_interval=None` — **폴링을 완전히 끈다** (엔티티만 숨기고
+  10분마다 연결하던 버그를 피한다).
 
 ### 3.3 코어 `xiaomi_ble`와의 관계
 
 - **중복 위험은 낮지만 0은 아니다.** 사용자의 기기에서는 코어가 값을 못 주지만, 다른 펌웨어/
   다른 개체에서는 코어가 정상 동작할 수 있다. 이 경우 온습도 센서가 두 벌 생긴다.
 - 대응: config flow / options에 `CONF_CLIMATE_SENSORS` (기본 **True**). 끄면 온습도/배터리
-  엔티티를 만들지 않고 시계 제어만 남는다. 초판의 "센서 최소주의"는 이 옵션으로 살아남는다.
+  엔티티를 만들지 않고 **주기적 GATT 폴링도 중지**하며 시계 제어만 남는다. 초판의 "센서
+  최소주의"는 이 옵션으로 살아남는다.
 - **연결 경합은 없다.** §0.3(3) — 코어는 이 device_id를 폴링하지 않는다.
 - 같은 BLE 주소를 `connections={(CONNECTION_BLUETOOTH, address)}`로 쓰므로 두 통합의 엔티티가
   **하나의 디바이스 카드에 합쳐진다.** `manufacturer="Xiaomi"`, `model="LYWSD02MMC"`로 맞춘다.
@@ -562,7 +565,7 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 3. `OPTIONS_SCHEMA` (config flow와 options flow가 공유 — niimbot 관례):
    | 키 | 셀렉터 | 기본값 |
    | --- | --- | --- |
-   | `CONF_SCAN_INTERVAL` | number, min 120 / max 3600 / step 60, unit `s` | 600 |
+   | `CONF_SCAN_INTERVAL` | number, min 120 / max 3600 / step 60, unit `s` | 1800 |
    | `CONF_CLIMATE_SENSORS` | boolean | `True` |
    | `CONF_RETRY_COUNT` | number, min 1 / max 5 | 3 |
    `CONF_AUTO_SYNC_HOURS`는 T8에서 추가.
@@ -710,7 +713,7 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 
 **변경.**
 
-- `CONF_AUTO_SYNC_HOURS`, `DEFAULT_AUTO_SYNC_HOURS = 0` (0 = 비활성).
+- `CONF_AUTO_SYNC_HOURS`, `DEFAULT_AUTO_SYNC_HOURS = 24` (매일; `0` = 비활성).
   셀렉터는 `select`로 `0 / 24 / 168` (비활성 / 매일 / 매주). **24시간 미만 옵션을 제공하지 않는다.**
 - `async_track_time_interval` 등록, 취소 콜백을 `entry.async_on_unload()`에 전달.
 - 자동 경로 실패는 **`HomeAssistantError`를 올리지 않는다.** `_LOGGER.debug`만, 연속 3회 실패부터
@@ -884,7 +887,7 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 
 | 리스크 | 영향 | 완화 |
 | --- | --- | --- |
-| 주기적 BLE 연결이 배터리를 소모 | 사용자 불만, 잦은 건전지 교체 | 기본 10분, 하한 120초, 사이클당 1회 notify만 수신 후 즉시 해제. README에 트레이드오프 명시 |
+| 주기적 BLE 연결이 배터리를 소모 | 사용자 불만, 잦은 건전지 교체 | 기본 30분(CR2032), 하한 120초, `climate_sensors=False`면 폴링 정지. 사이클당 1회 notify만 수신 후 즉시 해제. README에 트레이드오프 명시 |
 | 프록시 `active: false` | 기능 **전면** 무효 (광고를 전혀 쓰지 않으므로) | T9의 repair issue + README 최상단 안내. 유지보수자 환경은 이미 active 확인됨(§0.3) |
 | notify 첫 수신 지연이 기기마다 다름 | 폴링이 매번 타임아웃 | T1-c에서 실측해 timeout 결정. 기본 15초, 실패는 `UpdateFailed`로만 |
 | 펌웨어 리비전별 페이로드 차이 | 잘못된 write로 표시 깨짐 | write 후 read-back 검증, 실패 시 롤백 (T2) |

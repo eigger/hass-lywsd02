@@ -39,10 +39,10 @@
           "auto_sync_hours": "Automatic time sync interval"
         },
         "data_description": {
-          "scan_interval": "How often to connect and read climate over GATT. Minimum 120 seconds.",
-          "climate_sensors": "Turn off if core Xiaomi BLE already provides climate for this device and you only need clock control.",
+          "scan_interval": "How often to connect and read climate over GATT when climate sensors are enabled. Default 30 minutes (CR2032). Minimum 120 seconds.",
+          "climate_sensors": "When off, no temperature/humidity/battery entities are created and periodic GATT polling stops (clock control only).",
           "retry_count": "Number of connection attempts before failing a write.",
-          "auto_sync_hours": "0 = disabled. Shorter than 24 h is not offered to protect battery life."
+          "auto_sync_hours": "How often to write the Home Assistant clock to the device. Default every 24 hours. 0 = disabled."
         }
       }
     }
@@ -83,6 +83,14 @@
       },
       "last_failure": {
         "name": "Last failure"
+      },
+      "connection_duration": {
+        "name": "Connection duration"
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Connectivity"
       }
     }
   },
@@ -100,6 +108,11 @@
     "read_state": {
       "name": "Read state",
       "description": "Connect once and refresh display units from the device.",
+      "fields": {}
+    },
+    "dump_gatt": {
+      "name": "Dump GATT",
+      "description": "Connect once (including via Bluetooth proxy) and return the GATT service tree with readable characteristic values as hex. For protocol verification in Developer Tools.",
       "fields": {}
     }
   },

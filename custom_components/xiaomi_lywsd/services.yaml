@@ -18,3 +18,9 @@ read_state:
     entity:
       integration: xiaomi_lywsd
   fields: {}
+
+dump_gatt:
+  target:
+    entity:
+      integration: xiaomi_lywsd
+  fields: {}

@@ -39,6 +39,14 @@
       },
       "last_failure": {
         "default": "mdi:clock-alert"
+      },
+      "connection_duration": {
+        "default": "mdi:timer-outline"
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "default": "mdi:bluetooth-connect"
       }
     }
   }

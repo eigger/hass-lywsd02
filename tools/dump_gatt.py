@@ -5,6 +5,9 @@ Usage:
   python tools/dump_gatt.py AA:BB:CC:DD:EE:FF
 
 Standalone — imports bleak only. Does not import custom_components/.
+Requires a local BLE adapter that can reach the device. If the device is only
+reachable via an ESPHome Bluetooth proxy, use the Home Assistant service
+``xiaomi_lywsd.dump_gatt`` instead (Developer Tools → Services).
 """
 
 from __future__ import annotations

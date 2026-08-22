@@ -150,3 +150,73 @@ async def test_partial_failure_preserves_previous_battery():
     assert data.temperature == 21.5
     assert data.battery == 77  # preserved
     assert data.units == "celsius"
+
+
+def test_climate_sensors_off_disables_polling():
+    hass = MagicMock()
+    hass.data = {"xiaomi_lywsd": {"lock": asyncio.Lock()}}
+    entry = MagicMock()
+    entry.entry_id = "e1"
+    entry.data = {"address": "AA:BB:CC:DD:EE:FF"}
+    entry.options = {"climate_sensors": False, "scan_interval": 600}
+    entry.unique_id = "AA:BB:CC:DD:EE:FF"
+    coord = LywsdCoordinator(
+        hass,
+        entry,
+        "AA:BB:CC:DD:EE:FF",
+        hass.data["xiaomi_lywsd"]["lock"],
+        Lywsd02mmc(),
+    )
+    assert coord.update_interval is None
+
+
+def test_default_scan_interval_is_30_minutes():
+    from custom_components.xiaomi_lywsd.const import DEFAULT_SCAN_INTERVAL
+
+    hass, entry, coord = _coord()
+    entry.options = {}
+    coord2 = LywsdCoordinator(
+        hass,
+        entry,
+        "AA:BB:CC:DD:EE:FF",
+        hass.data["xiaomi_lywsd"]["lock"],
+        Lywsd02mmc(),
+    )
+    assert DEFAULT_SCAN_INTERVAL == 1800
+    assert coord2.update_interval.total_seconds() == 1800
+
+
+@pytest.mark.asyncio
+async def test_unknown_units_warns_once_with_hex(caplog):
+    import logging
+
+    from custom_components.xiaomi_lywsd.device.base import ClimateReading
+
+    hass, entry, coord = _coord()
+    caplog.set_level(logging.WARNING)
+
+    async def fake_execute(hass, entry, op, wrap_errors=False):
+        # Invoke op with a client whose get_units path fails via device
+        client = MagicMock()
+        device = MagicMock()
+        device.read_climate = AsyncMock(
+            return_value=ClimateReading(20.0, 40)
+        )
+        device.get_battery = AsyncMock(return_value=80)
+        device.get_units = AsyncMock(
+            side_effect=Exception("unknown units payload hex=00 raw=b'\\x00'")
+        )
+        return await op(client, device)
+
+    with patch(
+        "custom_components.xiaomi_lywsd.async_execute",
+        new=fake_execute,
+    ):
+        data1 = await coord._async_update_data()
+        data2 = await coord._async_update_data()
+
+    assert data1.units is None
+    assert data2.units is None
+    warnings = [r for r in caplog.records if "units read skipped" in r.message]
+    assert len(warnings) == 1
+    assert "hex=00" in warnings[0].message

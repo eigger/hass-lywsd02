@@ -39,10 +39,10 @@
           "auto_sync_hours": "자동 시간 동기화 주기"
         },
         "data_description": {
-          "scan_interval": "GATT로 온습도를 읽기 위해 연결하는 주기입니다. 최소 120초.",
-          "climate_sensors": "코어 Xiaomi BLE가 이미 온습도를 제공하고 시계 제어만 필요할 때 끄세요.",
+          "scan_interval": "기후 센서가 켜져 있을 때 GATT로 온습도를 읽는 주기입니다. 기본 30분(CR2032). 최소 120초.",
+          "climate_sensors": "끄면 온습도/배터리 엔티티를 만들지 않고 주기적 GATT 폴링도 멈춥니다(시계 제어만).",
           "retry_count": "쓰기 실패로 판정하기 전 연결 시도 횟수입니다.",
-          "auto_sync_hours": "0 = 비활성. 배터리 보호를 위해 24시간 미만 옵션은 제공하지 않습니다."
+          "auto_sync_hours": "Home Assistant 시각을 기기에 쓰는 주기입니다. 기본 24시간. 0 = 비활성."
         }
       }
     }
@@ -83,6 +83,14 @@
       },
       "last_failure": {
         "name": "마지막 실패"
+      },
+      "connection_duration": {
+        "name": "연결 시간"
+      }
+    },
+    "binary_sensor": {
+      "connectivity": {
+        "name": "연결 상태"
       }
     }
   },
@@ -100,6 +108,11 @@
     "read_state": {
       "name": "상태 읽기",
       "description": "한 번 연결해 기기의 표시 단위를 새로고침합니다.",
+      "fields": {}
+    },
+    "dump_gatt": {
+      "name": "GATT 덤프",
+      "description": "한 번 연결해(Bluetooth 프록시 포함) GATT 서비스 트리와 읽기 가능 characteristic 값을 hex로 반환합니다. 개발자 도구에서 프로토콜 확인용.",
       "fields": {}
     }
   },

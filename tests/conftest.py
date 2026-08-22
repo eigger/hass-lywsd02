@@ -55,6 +55,18 @@ def _make_entity_base(name: str):
     return type(name, (MockBase,), {})
 
 
+class _CoordinatorEntity(MockBase):
+    def __init__(self, coordinator=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.coordinator = coordinator
+
+    def async_write_ha_state(self):
+        pass
+
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+
 async def _async_noop(*args, **kwargs):
     return None
 
@@ -94,6 +106,7 @@ sys.modules["homeassistant.components.bluetooth"] = MagicMock()
 sys.modules["homeassistant.components.button"] = MagicMock()
 sys.modules["homeassistant.components.select"] = MagicMock()
 sys.modules["homeassistant.components.sensor"] = MagicMock()
+sys.modules["homeassistant.components.binary_sensor"] = MagicMock()
 
 ha_config_entries = MagicMock()
 ha_config_entries.ConfigFlow = MockConfigFlow
@@ -108,6 +121,7 @@ ha_const.Platform = MagicMock()
 ha_const.Platform.BUTTON = "button"
 ha_const.Platform.SELECT = "select"
 ha_const.Platform.SENSOR = "sensor"
+ha_const.Platform.BINARY_SENSOR = "binary_sensor"
 ha_const.EntityCategory = MagicMock()
 ha_const.EntityCategory.CONFIG = "config"
 ha_const.EntityCategory.DIAGNOSTIC = "diagnostic"
@@ -119,6 +133,7 @@ ha_const.PERCENTAGE = "%"
 sys.modules["homeassistant.const"] = ha_const
 
 sys.modules["homeassistant.core"] = MagicMock()
+sys.modules["homeassistant.core"].callback = lambda fn: fn
 sys.modules["homeassistant.helpers"] = MagicMock()
 sys.modules["homeassistant.helpers.selector"] = MagicMock()
 sys.modules["homeassistant.helpers.device_registry"] = MagicMock()
@@ -186,6 +201,7 @@ class _TrackingCoordinator(MockBase):
         super().__init__(*args, **kwargs)
         self.data = None
         self.last_update_success = True
+        self.update_interval = kwargs.get("update_interval")
         self._set_updated_calls = 0
         self._listener_calls = 0
 
@@ -216,13 +232,20 @@ for _mod_name, _attrs in (
         {"ButtonEntity": _make_entity_base("ButtonEntity")},
     ),
     (
+        "homeassistant.components.binary_sensor",
+        {
+            "BinarySensorEntity": _make_entity_base("BinarySensorEntity"),
+            "BinarySensorDeviceClass": MagicMock(),
+        },
+    ),
+    (
         "homeassistant.components.select",
         {"SelectEntity": _make_entity_base("SelectEntity")},
     ),
     (
         "homeassistant.helpers.update_coordinator",
         {
-            "CoordinatorEntity": _make_entity_base("CoordinatorEntity"),
+            "CoordinatorEntity": _CoordinatorEntity,
             "DataUpdateCoordinator": _TrackingCoordinator,
             "UpdateFailed": type("UpdateFailed", (Exception,), {}),
         },

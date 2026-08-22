@@ -14,7 +14,7 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -101,6 +101,7 @@ async def async_setup_entry(
 
     async_add_entities(
         [LywsdSensor(coordinator, desc) for desc in descriptions]
+        + [LywsdConnectionDurationSensor(coordinator)]
     )
 
 
@@ -142,3 +143,45 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         data: LywsdData = self._lywsd.data
         return getattr(data, self.entity_description.key, None)
+
+
+class LywsdConnectionDurationSensor(
+    CoordinatorEntity,
+    SensorEntity,
+):
+    """Seconds the last/current BLE session stayed connected."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "connection_duration"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, lywsd_coordinator) -> None:
+        super().__init__(lywsd_coordinator.connection_duration)
+        self._lywsd = lywsd_coordinator
+        self._attr_unique_id = (
+            f"xiaomi_lywsd_{lywsd_coordinator.identifier}_connection_duration"
+        )
+        self._attr_device_info = DeviceInfo(
+            connections={(CONNECTION_BLUETOOTH, lywsd_coordinator.address)},
+            name=f"LYWSD02 {lywsd_coordinator.identifier}",
+            manufacturer=MANUFACTURER,
+            model=MODEL,
+        )
+        self._native_value = float(lywsd_coordinator.connection_duration.data or 0.0)
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> float:
+        return self._native_value
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._native_value = float(self.coordinator.data or 0.0)
+        super()._handle_coordinator_update()

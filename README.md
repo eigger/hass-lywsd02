@@ -50,11 +50,12 @@ bluetooth_proxy:
 
 ## Options
 
-- **Poll interval** (default 600 s, minimum 120 s) — long-term battery impact
-  is not measured yet
-- **Create climate sensors** (default on) — turn off if you only need clock
-  control on a device where core already provides climate
-- BLE retries, automatic time sync (off / 24h / 7d)
+- **Poll interval** (default 1800 s / 30 min, minimum 120 s) — LYWSD02 uses a
+  **CR2032** coin cell; BLE connect time dominates drain. Long-term life data
+  is still missing
+- **Create climate sensors** (default on) — when off, climate entities are not
+  created **and periodic GATT polling stops** (clock-only mode)
+- BLE retries, automatic time sync (default **every 24 hours** / 7d / off)
 
 ## Development
 
@@ -70,6 +71,10 @@ python tools/probe_climate.py AA:BB:CC:DD:EE:FF
 python tools/probe_time.py AA:BB:CC:DD:EE:FF -5
 python tools/probe_units.py AA:BB:CC:DD:EE:FF
 ```
+
+For devices only reachable through an ESPHome Bluetooth proxy, use the
+`xiaomi_lywsd.dump_gatt` service in Developer Tools (returns hex values) instead
+of the standalone `tools/dump_gatt.py` script.
 
 ## License
 

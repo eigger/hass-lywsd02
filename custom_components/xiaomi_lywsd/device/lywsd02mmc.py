@@ -76,7 +76,9 @@ def decode_units(payload: bytes) -> str:
     try:
         return CODE_TO_UNITS[key]
     except KeyError as err:
-        raise LywsdDeviceError(f"unknown units payload: {payload!r}") from err
+        raise LywsdDeviceError(
+            f"unknown units payload hex={bytes(payload).hex()} raw={payload!r}"
+        ) from err
 
 
 def decode_climate(payload: bytes) -> ClimateReading:

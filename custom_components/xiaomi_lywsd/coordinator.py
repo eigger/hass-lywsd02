@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CLIMATE_SENSORS,
     CONF_SCAN_INTERVAL,
+    DEFAULT_CLIMATE_SENSORS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
@@ -54,19 +59,79 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.device = device
         self.hass = hass
         self.identifier = address.replace(":", "")[-8:]
+        self._units_warn_logged = False
+        self._session_start: float | None = None
+        self._unsub_duration: Callable[[], None] | None = None
         options = {**entry.data, **entry.options}
-        scan_interval = max(
-            MIN_SCAN_INTERVAL,
-            int(options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
+        climate_on = bool(
+            options.get(CONF_CLIMATE_SENSORS, DEFAULT_CLIMATE_SENSORS)
         )
+        # Clock-only mode must not open a BLE session every scan_interval —
+        # that was burning battery while no climate entity consumed the values.
+        if climate_on:
+            scan_interval = max(
+                MIN_SCAN_INTERVAL,
+                int(options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
+            )
+            update_interval: timedelta | None = timedelta(seconds=scan_interval)
+        else:
+            update_interval = None
         super().__init__(
             hass,
             _LOGGER,
             config_entry=entry,
             name=DOMAIN,
-            update_interval=timedelta(seconds=scan_interval),
+            update_interval=update_interval,
         )
         self.data = LywsdData()
+        # Separate coordinators so 1s duration ticks do not refresh climate.
+        self.connectivity = DataUpdateCoordinator[bool](
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN}_connectivity",
+            update_interval=None,
+        )
+        self.connectivity.data = False
+        self.connection_duration = DataUpdateCoordinator[float](
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN}_connection_duration",
+            update_interval=None,
+        )
+        self.connection_duration.data = 0.0
+
+    def begin_connection(self) -> None:
+        """Mark BLE session open (after establish_connection succeeds)."""
+        self._stop_duration_ticker()
+        self._session_start = time.monotonic()
+        self.connection_duration.async_set_updated_data(0.0)
+        self.connectivity.async_set_updated_data(True)
+        self._unsub_duration = async_track_time_interval(
+            self.hass, self._tick_duration, timedelta(seconds=1)
+        )
+
+    def end_connection(self) -> None:
+        """Mark BLE session closed and freeze last duration."""
+        self._stop_duration_ticker()
+        if self._session_start is not None:
+            elapsed = round(time.monotonic() - self._session_start, 1)
+            self.connection_duration.async_set_updated_data(elapsed)
+        self._session_start = None
+        self.connectivity.async_set_updated_data(False)
+
+    def _stop_duration_ticker(self) -> None:
+        if self._unsub_duration is not None:
+            self._unsub_duration()
+            self._unsub_duration = None
+
+    @callback
+    def _tick_duration(self, _now: datetime) -> None:
+        if self._session_start is None:
+            return
+        elapsed = round(time.monotonic() - self._session_start, 1)
+        self.connection_duration.async_set_updated_data(elapsed)
 
     def record_action_success(self) -> None:
         """Notify listeners after a button/select/service/auto-sync success.
@@ -102,7 +167,15 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
                 try:
                     units = await device.get_units(client)
                 except Exception as err:
-                    _LOGGER.debug("units read skipped: %s", err)
+                    # Once per coordinator lifetime — unknown bytes must be
+                    # visible without enabling debug (proxy T1 path).
+                    if not self._units_warn_logged:
+                        self._units_warn_logged = True
+                        _LOGGER.warning(
+                            "LYWSD %s: units read skipped: %s",
+                            self.address,
+                            err,
+                        )
             return climate, battery, units
 
         try:

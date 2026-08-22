@@ -16,7 +16,12 @@ from bleak_retry_connector import (
 
 from homeassistant.components import bluetooth
 from homeassistant.const import CONF_ADDRESS, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH
@@ -45,6 +50,7 @@ from .types import LywsdConfigEntry
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.SELECT,
     Platform.SENSOR,
@@ -54,6 +60,7 @@ T = TypeVar("T")
 
 SERVICE_SYNC_TIME = "sync_time"
 SERVICE_READ_STATE = "read_state"
+SERVICE_DUMP_GATT = "dump_gatt"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:
@@ -89,13 +96,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
     )
 
     # First refresh may fail if the device is briefly out of range — do not
-    # abort setup; the next poll interval will recover.
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        _LOGGER.warning(
-            "Initial LYWSD poll for %s failed (will retry): %s", address, err
-        )
+    # abort setup; the next poll interval will recover. Clock-only mode has no
+    # poll interval and must not open a BLE session at setup.
+    if coordinator.update_interval is not None:
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except Exception as err:
+            _LOGGER.warning(
+                "Initial LYWSD poll for %s failed (will retry): %s", address, err
+            )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -115,6 +124,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bo
     if len(hass.config_entries.async_entries(DOMAIN)) == 1:
         hass.services.async_remove(DOMAIN, SERVICE_SYNC_TIME)
         hass.services.async_remove(DOMAIN, SERVICE_READ_STATE)
+        hass.services.async_remove(DOMAIN, SERVICE_DUMP_GATT)
 
     async_delete_issue(hass, DOMAIN, f"no_connectable_scanner_{entry.entry_id}")
     async_delete_issue(hass, DOMAIN, f"proxy_not_active_{entry.entry_id}")
@@ -151,6 +161,7 @@ async def async_execute(
     async with hass.data[DOMAIN][LOCK]:
         for attempt in range(1, max_retries + 1):
             client: BleakClient | None = None
+            session_open = False
             try:
                 ble_device = bluetooth.async_ble_device_from_address(
                     hass, address, connectable=True
@@ -165,6 +176,8 @@ async def async_execute(
                 client = await establish_connection(
                     BleakClient, ble_device, ble_device.address
                 )
+                coordinator.begin_connection()
+                session_open = True
                 result = await op(client, device)
                 _clear_proxy_issues(hass, entry)
                 return result
@@ -198,6 +211,8 @@ async def async_execute(
                         _LOGGER.warning(
                             "%s disconnect warning: %s", address, disc_err
                         )
+                if session_open:
+                    coordinator.end_connection()
 
     raise RuntimeError("async_execute exhausted retries without result")  # pragma: no cover
 
@@ -220,8 +235,23 @@ def _async_register_services(hass: HomeAssistant) -> None:
         for entry in _entries_from_call(hass, call):
             await _service_read_state(hass, entry)
 
+    async def handle_dump_gatt(call: ServiceCall) -> ServiceResponse:
+        # Proxy-reachable diagnostic: walks the same async_execute path as
+        # normal ops so ESPHome active proxies work (unlike tools/dump_gatt.py).
+        out: dict[str, object] = {}
+        for entry in _entries_from_call(hass, call):
+            address = entry.runtime_data.address
+            out[address] = await _service_dump_gatt(hass, entry)
+        return out
+
     hass.services.async_register(DOMAIN, SERVICE_SYNC_TIME, handle_sync_time)
     hass.services.async_register(DOMAIN, SERVICE_READ_STATE, handle_read_state)
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DUMP_GATT,
+        handle_dump_gatt,
+        supports_response=SupportsResponse.ONLY,
+    )
 
 
 async def _service_sync_time(
@@ -262,6 +292,48 @@ async def _service_read_state(
         coordinator.record_action_success()
     except Exception:
         coordinator.record_failure()
+        raise
+
+
+async def collect_gatt_dump(client) -> dict:
+    """Walk GATT services; read every readable characteristic (hex)."""
+    services_out: list[dict] = []
+    for service in client.services:
+        chars_out: list[dict] = []
+        for char in service.characteristics:
+            props = list(char.properties)
+            char_entry: dict = {
+                "uuid": str(char.uuid),
+                "handle": getattr(char, "handle", None),
+                "properties": props,
+            }
+            if "read" in props:
+                try:
+                    value = await client.read_gatt_char(char.uuid)
+                    char_entry["value_hex"] = bytes(value).hex()
+                except Exception as err:
+                    char_entry["read_error"] = str(err)
+            chars_out.append(char_entry)
+        services_out.append(
+            {
+                "uuid": str(service.uuid),
+                "handle": getattr(service, "handle", None),
+                "characteristics": chars_out,
+            }
+        )
+    return {"services": services_out}
+
+
+async def _service_dump_gatt(
+    hass: HomeAssistant, entry: LywsdConfigEntry
+) -> dict:
+    async def _op(client, device):
+        return await collect_gatt_dump(client)
+
+    try:
+        return await async_execute(hass, entry, _op)
+    except Exception:
+        entry.runtime_data.record_failure()
         raise
 
 
