@@ -57,14 +57,14 @@
     },
     "select": {
       "display_units": {
-        "name": "Display units (E-Ink)",
+        "name": "Display units",
         "state": {
           "celsius": "Celsius (°C)",
           "fahrenheit": "Fahrenheit (°F)"
         }
       },
       "time_format": {
-        "name": "Clock mode (E-Ink, experimental)",
+        "name": "Clock mode",
         "state": {
           "12h": "12-hour",
           "24h": "24-hour"
@@ -83,6 +83,9 @@
       },
       "last_sync": {
         "name": "Last sync"
+      },
+      "next_sync": {
+        "name": "Next time sync"
       },
       "failure_count": {
         "name": "Failure count"

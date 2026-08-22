@@ -57,14 +57,14 @@
     },
     "select": {
       "display_units": {
-        "name": "표시 단위 (E-Ink)",
+        "name": "표시 단위",
         "state": {
           "celsius": "섭씨 (°C)",
           "fahrenheit": "화씨 (°F)"
         }
       },
       "time_format": {
-        "name": "시계 표시 모드 (E-Ink, 실험적)",
+        "name": "시계 표시 모드",
         "state": {
           "12h": "12시간제",
           "24h": "24시간제"
@@ -83,6 +83,9 @@
       },
       "last_sync": {
         "name": "마지막 동기화"
+      },
+      "next_sync": {
+        "name": "다음 시간 동기화"
       },
       "failure_count": {
         "name": "실패 횟수"

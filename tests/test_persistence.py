@@ -103,6 +103,16 @@ def test_adaptive_interval_without_a_rate_uses_bootstrap():
     assert auto_sync_interval_days(AUTO_SYNC_ADAPTIVE, None, 60) == pytest.approx(7.0)
 
 
+def test_measured_zero_drift_earns_the_longest_interval():
+    """A clock that held to within the device's 1 s resolution is the best
+    case, not an unknown — it must not land on a shorter cycle than a worse
+    clock (0.3 s/day already reaches the ceiling)."""
+    assert auto_sync_interval_days(AUTO_SYNC_ADAPTIVE, 0.0, 60) == AUTO_SYNC_MAX_DAYS
+    assert auto_sync_interval_days(AUTO_SYNC_ADAPTIVE, -0.0, 60) == AUTO_SYNC_MAX_DAYS
+    # And still shorter than the ceiling once real drift shows up.
+    assert auto_sync_interval_days(AUTO_SYNC_ADAPTIVE, 2.0, 60) < AUTO_SYNC_MAX_DAYS
+
+
 def test_fixed_interval_choices_are_days():
     assert auto_sync_interval_days("30", 999.0, 60) == pytest.approx(30.0)
 

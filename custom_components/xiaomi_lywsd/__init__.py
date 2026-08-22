@@ -189,11 +189,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
                 "Initial LYWSD poll for %s failed (will retry): %s", address, err
             )
 
+    # Arm the schedule before the platforms exist. next_sync is entity state
+    # now, so leaving this until after would publish "unknown / off" on every
+    # restart and correct it a moment later — enough to fire an automation
+    # watching for sync being switched off.
+    _async_setup_auto_sync(hass, entry)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _async_register_services(hass)
     _async_maybe_create_proxy_issues(hass, entry, address)
-    _async_setup_auto_sync(hass, entry)
 
     return True
 
@@ -598,9 +603,12 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
     """
     coordinator = entry.runtime_data
     options = {**entry.data, **entry.options}
+    choice = auto_sync_choice(options)
+    coordinator.data.auto_sync_mode = choice
 
-    if auto_sync_choice(options) == AUTO_SYNC_DISABLED:
+    if choice == AUTO_SYNC_DISABLED:
         coordinator.data.next_sync = None
+        coordinator.data.sync_interval_days = None
         coordinator.reschedule_auto_sync = None
         return
 
@@ -613,6 +621,11 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
 
     def _schedule(when: datetime) -> None:
         _cancel()
+        # The configured cadence, not the gap to `when` — a backoff retry must
+        # not make the sensor claim the interval shrank.
+        coordinator.data.sync_interval_days = round(
+            _auto_sync_interval(coordinator, options).total_seconds() / 86400.0, 2
+        )
         coordinator.data.next_sync = when
         state["unsub"] = async_track_point_in_time(hass, _fire, when)
         # Entities are already up by the time setup arms this, so the value

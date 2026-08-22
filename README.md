@@ -70,7 +70,8 @@ Each sync measures how far the clock had wandered since the previous one, which
 gives a drift rate in seconds per day. The next interval is the tolerated error
 divided by that rate, clamped to 1–180 days: an accurate unit stretches out to
 months on its own, a sloppy one keeps a short cycle. Until two syncs have been
-observed it falls back to 7 days.
+observed it falls back to 7 days; a clock that holds to within the device's
+one-second resolution goes straight to the 180-day ceiling.
 
 The schedule is **stored on disk**, so restarting Home Assistant does not restart
 the countdown — a 30-day interval still fires on day 30 even on a box that
@@ -80,14 +81,28 @@ than retrying every minute.
 
 ### Clock diagnostics
 
-`sensor.*_last_sync` carries the clock health as attributes rather than separate
-entities:
+Two timestamp sensors, each carrying its context as attributes rather than
+spawning more entities:
+
+`sensor.*_last_sync` — when the clock was last corrected.
 
 | Attribute | Meaning |
 | --- | --- |
-| `drift_seconds` | Error measured just before the last correction |
+| `drift_seconds` | Error measured just before that correction |
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
-| `next_sync` | When the next automatic sync is scheduled |
+
+`sensor.*_next_sync` — when the next automatic sync is due. The state is
+`unknown` when automatic sync is off, which the attributes state outright so
+that "off" is never confused with "not computed yet".
+
+| Attribute | Meaning |
+| --- | --- |
+| `auto_sync` | `off`, `auto`, or the configured number of days |
+| `interval_days` | The cadence in effect — from the drift rate in Automatic mode, from the dropdown otherwise. Unchanged by a failure backoff |
+| `drift_seconds_per_day` | The rate the interval was derived from |
+
+So `state_attr('sensor.lywsd02_xxxx_next_sync', 'auto_sync') == 'off'` is enough
+to alert on a device whose clock is no longer being corrected.
 
 ## Upgrading from 0.1.x
 
@@ -99,6 +114,10 @@ seconds becomes minutes.
 `sensor.*_clock_drift` is no longer created — its values moved onto `last_sync`
 attributes. The old entity stays in the registry as unavailable until deleted by
 hand.
+
+Since 0.2.1 the schedule has its own entity, so `next_sync` is **no longer an
+attribute of `last_sync`** — read `sensor.*_next_sync` instead. Templates
+written against the 0.2.0 attribute need updating.
 
 ## Development
 
