@@ -101,16 +101,19 @@ spawning more entities:
 | --- | --- |
 | `drift_seconds` | Error measured just before that correction |
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
-| `write_compensation_seconds` | Seconds added to the sampled time so it lands correct despite link latency. A proxy hop typically costs one or two |
+| `write_compensation_seconds` | Seconds between the sampled time and the boundary aimed at — link latency plus the wait for the boundary |
 
-The clock is written to the second it will *arrive*, not the second it was
-sampled. A GATT read round trip and the outbound write each take a few hundred
-milliseconds over an ESPHome proxy, and the device stores whole seconds — left
-uncompensated those errors all point the same way and leave the display a few
-seconds behind. The elapsed time is measured on a monotonic clock, half the
-observed read round trip is added as the outbound estimate, and the result is
-rounded rather than floored. What remains is the device's own one-second
-resolution.
+The write is **aimed at a second boundary** rather than rounded to one. The
+device stores whole seconds, so rounding leaves up to half a second of error —
+and not evenly: when the link latency puts the target just past .5 every time,
+rounding goes up every time and the display runs consistently early. Flooring
+only moves the bias the other way.
+
+Instead the next boundary the write can still reach is chosen, and the write is
+held back until that boundary minus one estimated one-way trip, so the device
+receives second T at second T. Latency is measured rather than assumed — the
+preceding GATT read's round trip provides the estimate — and the wait cannot
+exceed one second.
 
 `sensor.*_next_sync` — when the next automatic sync is due. The state is
 `unknown` when automatic sync is off, which the attributes state outright so

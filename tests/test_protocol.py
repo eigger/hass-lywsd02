@@ -23,6 +23,9 @@ from custom_components.xiaomi_lywsd.device import device_for
 from tests.fake_client import FakeBleakClient
 
 
+from tests.stub_clock import StubClock as _StubClock
+
+
 @pytest.mark.parametrize(
     "tz",
     [9, -5, 0, 14, -12],
@@ -68,12 +71,13 @@ async def test_set_time_writes_expected_bytes():
         {UUID_TIME: encode_time(initial_epoch, 9)},
     )
     device = Lywsd02mmc()
-    result = await device.set_time(client, when, 9)
+    result = await device.set_time(client, when, 9, **_StubClock().hooks)
     assert result.drift_seconds == pytest.approx(-120.0)
-    assert result.written_epoch == epoch
+    # The write is aimed at the next whole second, not at the sampled one.
+    assert result.written_epoch == epoch + 1
     assert any(w[0] == UUID_TIME and w[2] is True for w in client.writes)
     written = next(w[1] for w in client.writes if w[0] == UUID_TIME)
-    assert written == encode_time(epoch, 9)
+    assert written == encode_time(epoch + 1, 9)
 
 
 @pytest.mark.asyncio
@@ -85,7 +89,7 @@ async def test_set_time_verify_error_on_mismatch():
     )
     device = Lywsd02mmc()
     with pytest.raises(LywsdVerifyError):
-        await device.set_time(client, when, 9)
+        await device.set_time(client, when, 9, **_StubClock().hooks)
 
 
 @pytest.mark.asyncio

@@ -63,7 +63,7 @@ class LywsdDevice(ABC):
 
     @abstractmethod
     async def set_time(
-        self, client, when: datetime, tz_offset_hours: int
+        self, client, when: datetime, tz_offset_hours: int, **kwargs
     ) -> SyncResult:
         """Write wall clock time and return drift/verify metadata."""
 
@@ -76,7 +76,12 @@ class LywsdDevice(ABC):
         """Write display units; roll back on verify failure."""
 
     async def set_time_format(
-        self, client, time_format: str, when: datetime, tz_offset_hours: int
+        self,
+        client,
+        time_format: str,
+        when: datetime,
+        tz_offset_hours: int,
+        **kwargs,
     ) -> SyncResult:
         """Switch the E-Ink clock between 12h and 24h, then re-sync the clock.
 

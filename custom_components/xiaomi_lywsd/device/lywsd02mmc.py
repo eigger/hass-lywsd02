@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import struct
 import time
 from datetime import datetime, timezone
@@ -152,21 +153,30 @@ class Lywsd02mmc(LywsdDevice):
         return decode_climate(holder["payload"])
 
     async def set_time(
-        self, client, when: datetime, tz_offset_hours: int, *, monotonic=time.monotonic
+        self,
+        client,
+        when: datetime,
+        tz_offset_hours: int,
+        *,
+        monotonic=time.monotonic,
+        sleeper=asyncio.sleep,
     ) -> SyncResult:
-        """Write the wall clock, compensating for the trip it takes to get there.
+        """Write the wall clock so it lands on a whole second.
 
-        ``when`` is the instant the caller sampled, not the instant the write
-        lands. Between the two sit a GATT read round trip and the outbound write
-        — hundreds of milliseconds each over an ESPHome proxy — and the device
-        stores whole seconds, so truncating instead of rounding threw away up to
-        another one. All three errors point the same way, leaving the display
-        seconds *behind* real time.
+        The device stores whole seconds, so rounding the target leaves up to
+        half a second of quantisation — and not evenly: when the link latency
+        lands the target just above .5 every time, rounding goes up every time
+        and the display runs consistently early. Flooring just moves the bias
+        the other way.
 
-        So the elapsed time is measured on a monotonic clock, half the observed
-        read round trip is added as an estimate of the outbound leg, and the
-        result is rounded rather than floored. What is left is the device's own
-        one-second resolution.
+        So the write is aimed instead of rounded. The next second boundary the
+        write can still reach is chosen, and the write is held back until the
+        boundary minus one estimated one-way trip. The device then receives
+        second T at second T, and what is left is the error in the latency
+        estimate rather than a guaranteed half second.
+
+        Latency is measured, not assumed: the preceding read's round trip gives
+        the estimate, and the wait is capped by construction at one second.
         """
         started = monotonic()
         before = await client.read_gatt_char(UUID_TIME)
@@ -182,13 +192,19 @@ class Lywsd02mmc(LywsdDevice):
             when_utc = when.astimezone(timezone.utc)
         base_ts = when_utc.timestamp()
 
-        # Compare like with like: the device reading is from base_ts + one_way.
+        def _now_ts() -> float:
+            return base_ts + (monotonic() - started)
+
+        # Compare like with like: that reading describes the device at the
+        # midpoint of the read, which is base_ts + one_way on our clock.
         drift_seconds = float(before_epoch - (base_ts + one_way))
 
-        # Aim at the moment the write will arrive, not the moment it is built.
-        elapsed = monotonic() - started
-        written_epoch = round(base_ts + elapsed + one_way)
-        compensation = written_epoch - int(base_ts)
+        # First boundary the write can still reach, then wait for its cue.
+        written_epoch = int(math.floor(_now_ts() + one_way)) + 1
+        wait = (written_epoch - one_way) - _now_ts()
+        if wait > 0:
+            await sleeper(wait)
+        compensation = float(written_epoch) - base_ts
 
         payload = encode_time(written_epoch, tz_offset_hours)
         await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
@@ -211,7 +227,14 @@ class Lywsd02mmc(LywsdDevice):
         )
 
     async def set_time_format(
-        self, client, time_format: str, when: datetime, tz_offset_hours: int
+        self,
+        client,
+        time_format: str,
+        when: datetime,
+        tz_offset_hours: int,
+        *,
+        monotonic=time.monotonic,
+        sleeper=asyncio.sleep,
     ) -> SyncResult:
         """Write the 12h/24h mode, then rewrite the wall clock.
 
@@ -245,7 +268,9 @@ class Lywsd02mmc(LywsdDevice):
         # permissions are fine, so a rejected 7-byte write really was the
         # firmware refusing *this command* rather than a transport problem.
         try:
-            result = await self.set_time(client, when, tz_offset_hours)
+            result = await self.set_time(
+                client, when, tz_offset_hours, monotonic=monotonic, sleeper=sleeper
+            )
         except Exception as err:
             if mode_error is not None:
                 # Both writes failed — that is a connection or permission
