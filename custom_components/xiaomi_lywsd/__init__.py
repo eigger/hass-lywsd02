@@ -189,11 +189,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
                 "Initial LYWSD poll for %s failed (will retry): %s", address, err
             )
 
+    # Arm the schedule before the platforms exist. next_sync is entity state
+    # now, so leaving this until after would publish "unknown / off" on every
+    # restart and correct it a moment later — enough to fire an automation
+    # watching for sync being switched off.
+    _async_setup_auto_sync(hass, entry)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _async_register_services(hass)
     _async_maybe_create_proxy_issues(hass, entry, address)
-    _async_setup_auto_sync(hass, entry)
 
     return True
 

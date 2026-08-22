@@ -91,8 +91,9 @@ spawning more entities:
 | `drift_seconds` | Error measured just before that correction |
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
 
-`sensor.*_next_sync` — when the next automatic sync is due. **Empty means
-automatic sync is off**, which the attributes state outright.
+`sensor.*_next_sync` — when the next automatic sync is due. The state is
+`unknown` when automatic sync is off, which the attributes state outright so
+that "off" is never confused with "not computed yet".
 
 | Attribute | Meaning |
 | --- | --- |
@@ -113,6 +114,10 @@ seconds becomes minutes.
 `sensor.*_clock_drift` is no longer created — its values moved onto `last_sync`
 attributes. The old entity stays in the registry as unavailable until deleted by
 hand.
+
+Since 0.2.1 the schedule has its own entity, so `next_sync` is **no longer an
+attribute of `last_sync`** — read `sensor.*_next_sync` instead. Templates
+written against the 0.2.0 attribute need updating.
 
 ## Development
 
