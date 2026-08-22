@@ -15,7 +15,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from . import async_execute
+from . import async_execute, async_read_battery_into
 from .const import MANUFACTURER, MODEL, TIME_FORMAT_OPTIONS
 from .device import (
     LywsdClockRepairError,
@@ -167,6 +167,7 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
             )
             coordinator.data.time_format = option
             coordinator.note_sync(result.drift_seconds, dt_util.now())
+            await async_read_battery_into(client, device, coordinator)
             return option
 
         try:

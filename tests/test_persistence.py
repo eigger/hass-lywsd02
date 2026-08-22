@@ -111,3 +111,15 @@ def test_auto_sync_choice_falls_back_to_default():
     assert auto_sync_choice({CONF_AUTO_SYNC: "90"}) == "90"
     assert auto_sync_choice({}) == AUTO_SYNC_ADAPTIVE
     assert auto_sync_choice({CONF_AUTO_SYNC: "nonsense"}) == AUTO_SYNC_ADAPTIVE
+
+
+@pytest.mark.asyncio
+async def test_battery_survives_a_restart():
+    """A clock-only install may not poll for months; unknown until then is worse."""
+    first = _coordinator("entry-battery")
+    first.data.battery = 63
+    await first.async_save_persisted()
+
+    second = _coordinator("entry-battery")
+    await second.async_load_persisted()
+    assert second.data.battery == 63

@@ -31,6 +31,15 @@ def _parse_dt(raw: Any) -> datetime | None:
     return parsed
 
 
+def _parse_int(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_float(raw: Any) -> float | None:
     if raw is None:
         return None
@@ -61,6 +70,9 @@ class LywsdStore:
             "last_sync": _parse_dt(raw.get("last_sync")),
             "clock_drift": _parse_float(raw.get("clock_drift")),
             "drift_rate_per_day": _parse_float(raw.get("drift_rate_per_day")),
+            # Slow-moving enough to be worth keeping: with a 180-day sync
+            # cycle the alternative is "unknown" for months after a restart.
+            "battery": _parse_int(raw.get("battery")),
             "units": raw.get("units") or None,
             "time_format": (
                 time_format if time_format in TIME_FORMAT_OPTIONS else None
@@ -73,6 +85,7 @@ class LywsdStore:
         last_sync: datetime | None,
         clock_drift: float | None,
         drift_rate_per_day: float | None,
+        battery: int | None,
         units: str | None,
         time_format: str | None,
     ) -> None:
@@ -82,6 +95,7 @@ class LywsdStore:
                 "last_sync": last_sync.isoformat() if last_sync else None,
                 "clock_drift": clock_drift,
                 "drift_rate_per_day": drift_rate_per_day,
+                "battery": battery,
                 "units": units,
                 "time_format": time_format,
             }

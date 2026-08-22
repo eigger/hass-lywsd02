@@ -149,6 +149,8 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.data.last_sync = stored.get("last_sync")
         self.data.clock_drift = stored.get("clock_drift")
         self.data.drift_rate_per_day = stored.get("drift_rate_per_day")
+        if stored.get("battery") is not None:
+            self.data.battery = stored["battery"]
         if stored.get("units"):
             self.data.units = stored["units"]
         if stored.get("time_format"):
@@ -161,6 +163,7 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
                 last_sync=self.data.last_sync,
                 clock_drift=self.data.clock_drift,
                 drift_rate_per_day=self.data.drift_rate_per_day,
+                battery=self.data.battery,
                 units=self.data.units,
                 time_format=self.data.time_format,
             )

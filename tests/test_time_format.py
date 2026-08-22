@@ -196,3 +196,30 @@ async def test_timeout_is_not_reported_as_unsupported():
 
     with pytest.raises(TimeoutError):
         await device.set_time_format(client, "24h", WHEN, 9)
+
+
+@pytest.mark.asyncio
+async def test_battery_is_read_on_a_sync_connection():
+    """Clock-only installs never poll, so the sync is the only chance."""
+    from custom_components.xiaomi_lywsd import async_read_battery_into
+    from custom_components.xiaomi_lywsd.device.lywsd02mmc import UUID_BATTERY
+
+    _hass, entry = _entry()
+    coordinator = entry.runtime_data
+    client = FakeBleakClient({UUID_BATTERY: bytes([77])})
+
+    await async_read_battery_into(client, Lywsd02mmc(), coordinator)
+    assert coordinator.data.battery == 77
+
+
+@pytest.mark.asyncio
+async def test_unreadable_battery_never_breaks_a_sync():
+    from custom_components.xiaomi_lywsd import async_read_battery_into
+
+    _hass, entry = _entry()
+    coordinator = entry.runtime_data
+    coordinator.data.battery = 55
+    client = FakeBleakClient({})  # no battery characteristic at all
+
+    await async_read_battery_into(client, Lywsd02mmc(), coordinator)
+    assert coordinator.data.battery == 55  # previous value kept

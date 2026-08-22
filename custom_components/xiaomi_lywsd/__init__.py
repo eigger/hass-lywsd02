@@ -74,6 +74,19 @@ SERVICE_READ_STATE = "read_state"
 SERVICE_DUMP_GATT = "dump_gatt"
 
 
+async def async_read_battery_into(client, device, coordinator) -> None:
+    """Piggyback a battery read on a connection that is already open.
+
+    One byte from EBE0CCC4, so it costs nothing next to a clock write — and it
+    is the only way a clock-only install (climate polling off by default) ever
+    learns the battery level. ``get_battery`` swallows its own errors, so this
+    can never turn a successful sync into a failure.
+    """
+    battery = await device.get_battery(client)
+    if battery is not None:
+        coordinator.data.battery = battery
+
+
 def _auto_sync_from_v1_hours(raw: object) -> str:
     """Map the 0.1.x hours option onto a day-based choice.
 
@@ -330,6 +343,7 @@ async def _service_sync_time(
     async def _op(client, device):
         result = await device.set_time(client, dt_util.now(), offset)
         coordinator.note_sync(result.drift_seconds, dt_util.now())
+        await async_read_battery_into(client, device, coordinator)
         return result
 
     try:
@@ -551,6 +565,7 @@ async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
         result = await device.set_time(client, now, offset)
         coordinator.note_sync(result.drift_seconds, dt_util.now())
         coordinator.data.consecutive_auto_failures = 0
+        await async_read_battery_into(client, device, coordinator)
         return result
 
     try:

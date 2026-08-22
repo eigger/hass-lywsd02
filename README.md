@@ -19,7 +19,8 @@ covers LYWSD02-class devices core cannot read.
 
 | Feature | Provided by |
 | --- | --- |
-| Temperature / humidity / battery | **This integration** (periodic GATT) |
+| Temperature / humidity | **This integration** (periodic GATT poll) |
+| Battery | **This integration** (read on any connection, incl. clock sync) |
 | E-Ink clock time sync | **This integration** |
 | °C / °F display units (screen) | **This integration** |
 
@@ -50,9 +51,11 @@ bluetooth_proxy:
 
 ## Options
 
-- **Enable climate sensors** (default **off**) — creates temperature /
-  humidity / battery entities and starts GATT polling. Sensors stay
-  unavailable until the first successful reading
+- **Enable climate sensors** (default **off**) — creates temperature and
+  humidity entities and starts GATT polling. They stay unavailable until the
+  first successful reading. **Battery is not part of this** — it is one byte
+  from `EBE0CCC4` read on whatever connection is already open, so a clock-only
+  install still gets a battery level at every automatic sync
 - **Poll interval** (default **30 minutes**, range 2–60) — only used when
   climate sensors are enabled. LYWSD02 uses a **CR2032** coin cell; BLE
   connect time dominates drain

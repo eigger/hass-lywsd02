@@ -28,7 +28,10 @@ from .const import (
 from .coordinator import LywsdData
 from .types import LywsdConfigEntry
 
-CLIMATE_VALUE_KEYS = frozenset({"temperature", "humidity", "battery"})
+# Only these are tied to the climate poll. Battery rides along on whatever
+# connection is already open, including a clock sync, so it must not disappear
+# when climate polling is off or its last cycle failed.
+CLIMATE_VALUE_KEYS = frozenset({"temperature", "humidity"})
 
 CLIMATE_SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
@@ -46,6 +49,9 @@ CLIMATE_SENSORS: tuple[SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
     ),
+)
+
+DIAGNOSTIC_SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="battery",
         translation_key="battery",
@@ -54,9 +60,6 @@ CLIMATE_SENSORS: tuple[SensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-)
-
-DIAGNOSTIC_SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="last_sync",
         translation_key="last_sync",
@@ -129,6 +132,11 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
                 getattr(self._lywsd.data, self.entity_description.key, None)
                 is not None
             )
+        # Battery comes from any connection, so it is available once read —
+        # a failed climate poll says nothing about a value taken at the last
+        # clock sync.
+        if self.entity_description.key == "battery":
+            return self._lywsd.data.battery is not None
         return True
 
     @property

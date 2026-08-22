@@ -267,8 +267,11 @@ def test_diagnostic_sensors_available_when_poll_failed():
     coord.data.last_failure = datetime.now(timezone.utc)
     coord.data.clock_drift = -12.5
 
+    def _diag(key: str) -> LywsdSensor:
+        return LywsdSensor(coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == key))
+
     temp = LywsdSensor(coord, CLIMATE_SENSORS[0])
-    last_sync = LywsdSensor(coord, DIAGNOSTIC_SENSORS[0])
+    last_sync = _diag("last_sync")
     failure_count = LywsdSensor(
         coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "failure_count")
     )
@@ -287,3 +290,11 @@ def test_diagnostic_sensors_available_when_poll_failed():
     assert failure_count.native_value == 2
     assert last_failure.available is True
     assert last_failure.native_value == coord.data.last_failure
+
+    # Battery is not climate-gated: it is read on any connection, including a
+    # clock sync, so a failed climate poll must not hide it.
+    battery = _diag("battery")
+    assert battery.available is False  # nothing read yet
+    coord.data.battery = 74
+    assert battery.available is True
+    assert battery.native_value == 74
