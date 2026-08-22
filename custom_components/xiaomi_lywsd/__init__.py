@@ -100,8 +100,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
         name=f"LYWSD02 {identifier}",
     )
 
-    _async_remove_retired_entities(hass, entry, identifier)
-
     # Durable state first: the auto-sync scheduler needs last_sync before any
     # entity exists, and the selects need their restored values.
     await coordinator.async_load_persisted()
@@ -124,27 +122,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
     _async_setup_auto_sync(hass, entry)
 
     return True
-
-
-# Entities dropped in 0.2.0. Without this they linger as permanently
-# unavailable rows in every existing install.
-_RETIRED_UNIQUE_ID_SUFFIXES = ("clock_drift",)
-
-
-def _async_remove_retired_entities(
-    hass: HomeAssistant, entry: LywsdConfigEntry, identifier: str
-) -> None:
-    """Drop registry entries for entities this version no longer creates."""
-    from homeassistant.helpers import entity_registry as er
-
-    registry = er.async_get(hass)
-    for suffix in _RETIRED_UNIQUE_ID_SUFFIXES:
-        unique_id = f"xiaomi_lywsd_{identifier}_{suffix}"
-        entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
-        if entity_id is None:
-            continue
-        _LOGGER.debug("Removing retired entity %s", entity_id)
-        registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:

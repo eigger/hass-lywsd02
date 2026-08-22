@@ -15,7 +15,6 @@ from custom_components.xiaomi_lywsd import (
 from custom_components.xiaomi_lywsd.const import (
     AUTO_SYNC_RETRY_BASE_SECONDS,
     CONF_AUTO_SYNC,
-    CONF_AUTO_SYNC_HOURS,
     CONF_AUTO_SYNC_TOLERANCE,
     STARTUP_SYNC_DELAY_SECONDS,
 )
@@ -47,26 +46,6 @@ def test_auto_sync_disabled_registers_nothing():
         track.assert_not_called()
         entry.async_on_unload.assert_not_called()
         assert entry.runtime_data.data.next_sync is None
-
-
-def test_auto_sync_legacy_hours_option_still_works():
-    """Installs upgraded from auto_sync_hours must keep syncing."""
-    hass = MagicMock()
-    entry = _auto_sync_entry({CONF_AUTO_SYNC_HOURS: 168})
-    entry.runtime_data.data.last_sync = dt.datetime(
-        2026, 1, 1, tzinfo=dt.timezone.utc
-    )
-
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now",
-        return_value=dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc),
-    ):
-        _async_setup_auto_sync(hass, entry)
-
-    when = track.call_args.args[2]
-    assert when == dt.datetime(2026, 1, 8, tzinfo=dt.timezone.utc)
 
 
 def test_auto_sync_schedules_from_persisted_last_sync():

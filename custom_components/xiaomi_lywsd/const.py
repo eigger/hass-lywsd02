@@ -4,32 +4,47 @@ from __future__ import annotations
 
 DOMAIN = "xiaomi_lywsd"
 LOCK = "lock"
+STORAGE_VERSION = 1
 
-CONF_RETRY_COUNT = "retry_count"
-CONF_AUTO_SYNC_HOURS = "auto_sync_hours"  # legacy (hours); migrated to CONF_AUTO_SYNC
-CONF_AUTO_SYNC = "auto_sync"
-CONF_AUTO_SYNC_TOLERANCE = "auto_sync_tolerance"
+MANUFACTURER = "Xiaomi"
+MODEL = "LYWSD02MMC"
+
+# ── Options ──────────────────────────────────────────────────────────────────
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_CLIMATE_SENSORS = "climate_sensors"
+CONF_RETRY_COUNT = "retry_count"
+CONF_AUTO_SYNC = "auto_sync"
+CONF_AUTO_SYNC_TOLERANCE = "auto_sync_tolerance"
 
 DEFAULT_RETRY_COUNT = 3
-DEFAULT_AUTO_SYNC_HOURS = 0
 
-# Auto sync is stored as a string so the dropdown and "auto" share one option.
+# ── Climate polling ──────────────────────────────────────────────────────────
+# Off by default: the clock is the point of this integration, and every poll
+# opens a BLE session on a CR2032 device. Interval is stored/shown in minutes.
+DEFAULT_CLIMATE_SENSORS = False
+DEFAULT_SCAN_INTERVAL = 30
+MIN_SCAN_INTERVAL = 2
+MAX_SCAN_INTERVAL = 60
+
+# ── Automatic clock sync ─────────────────────────────────────────────────────
+# Stored as a string so the fixed day counts and "auto" share one dropdown.
 AUTO_SYNC_DISABLED = "0"
 AUTO_SYNC_ADAPTIVE = "auto"
 AUTO_SYNC_CHOICES = ("0", "1", "7", "30", "90", "180", AUTO_SYNC_ADAPTIVE)
 DEFAULT_AUTO_SYNC = AUTO_SYNC_ADAPTIVE
+
 # Adaptive mode aims to keep the clock within this many seconds.
 DEFAULT_AUTO_SYNC_TOLERANCE = 60
 MIN_AUTO_SYNC_TOLERANCE = 10
 MAX_AUTO_SYNC_TOLERANCE = 3600
+
 # Used until two syncs have been observed and a drift rate is known.
 AUTO_SYNC_BOOTSTRAP_DAYS = 7.0
 AUTO_SYNC_MIN_DAYS = 1.0
 AUTO_SYNC_MAX_DAYS = 180.0
 # Two syncs closer together than this are too noisy to derive a rate from.
 AUTO_SYNC_MIN_RATE_SAMPLE_DAYS = 0.5
+
 # Grace period after startup before a due sync fires, so the Bluetooth stack
 # and any ESPHome proxies have settled.
 STARTUP_SYNC_DELAY_SECONDS = 60
@@ -38,71 +53,32 @@ STARTUP_SYNC_DELAY_SECONDS = 60
 AUTO_SYNC_RETRY_BASE_SECONDS = 1800
 AUTO_SYNC_RETRY_MAX_SECONDS = 21600
 
-STORAGE_VERSION = 1
-
+# ── Display ──────────────────────────────────────────────────────────────────
 TIME_FORMAT_12H = "12h"
 TIME_FORMAT_24H = "24h"
 TIME_FORMAT_OPTIONS = (TIME_FORMAT_12H, TIME_FORMAT_24H)
-# Stored / shown as minutes. Legacy option values were seconds (>= 120).
-DEFAULT_SCAN_INTERVAL = 30
-DEFAULT_CLIMATE_SENSORS = False
-MIN_SCAN_INTERVAL = 2
-MAX_SCAN_INTERVAL = 60
-# Values at or above this were saved as seconds before the minutes UI.
-_LEGACY_SCAN_INTERVAL_SECONDS_FLOOR = 120
 
-MANUFACTURER = "Xiaomi"
-MODEL = "LYWSD02MMC"
+
+def scan_interval_minutes(raw: int | None) -> int:
+    """Clamp the stored poll interval to the offered range."""
+    if raw is None:
+        return DEFAULT_SCAN_INTERVAL
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_SCAN_INTERVAL
+    return max(MIN_SCAN_INTERVAL, min(MAX_SCAN_INTERVAL, minutes))
 
 
 def scan_interval_seconds(raw: int | None) -> int:
-    """Convert option value to seconds.
-
-    New installs store minutes (2–60). Older installs stored seconds (120–3600).
-    """
-    if raw is None:
-        minutes = DEFAULT_SCAN_INTERVAL
-    else:
-        minutes = int(raw)
-    if minutes >= _LEGACY_SCAN_INTERVAL_SECONDS_FLOOR:
-        return max(_LEGACY_SCAN_INTERVAL_SECONDS_FLOOR, minutes)
-    minutes = max(MIN_SCAN_INTERVAL, min(MAX_SCAN_INTERVAL, minutes))
-    return minutes * 60
-
-
-def scan_interval_minutes_for_ui(raw: int | None) -> int:
-    """Normalize stored option to minutes for the options form."""
-    if raw is None:
-        return DEFAULT_SCAN_INTERVAL
-    value = int(raw)
-    if value >= _LEGACY_SCAN_INTERVAL_SECONDS_FLOOR:
-        return max(MIN_SCAN_INTERVAL, min(MAX_SCAN_INTERVAL, value // 60))
-    return max(MIN_SCAN_INTERVAL, min(MAX_SCAN_INTERVAL, value))
+    """Poll interval in seconds."""
+    return scan_interval_minutes(raw) * 60
 
 
 def auto_sync_choice(options: dict) -> str:
-    """Return the auto-sync option, migrating the legacy hours value.
-
-    Old installs stored ``auto_sync_hours`` as 0 / 24 / 168.
-    """
-    raw = options.get(CONF_AUTO_SYNC)
-    if raw is not None:
-        value = str(raw)
-        return value if value in AUTO_SYNC_CHOICES else DEFAULT_AUTO_SYNC
-
-    legacy = options.get(CONF_AUTO_SYNC_HOURS)
-    if legacy is None:
-        return DEFAULT_AUTO_SYNC
-    try:
-        hours = int(legacy)
-    except (TypeError, ValueError):
-        return DEFAULT_AUTO_SYNC
-    if hours <= 0:
-        return AUTO_SYNC_DISABLED
-    days = max(1, round(hours / 24))
-    # Snap to the nearest offered choice rather than inventing a new one.
-    numeric = [c for c in AUTO_SYNC_CHOICES if c not in (AUTO_SYNC_ADAPTIVE,)]
-    return min(numeric, key=lambda c: abs(int(c) - days))
+    """Return the auto-sync option, falling back to the default."""
+    value = str(options.get(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC))
+    return value if value in AUTO_SYNC_CHOICES else DEFAULT_AUTO_SYNC
 
 
 def auto_sync_tolerance_seconds(options: dict) -> int:
@@ -115,7 +91,9 @@ def auto_sync_tolerance_seconds(options: dict) -> int:
     return max(MIN_AUTO_SYNC_TOLERANCE, min(MAX_AUTO_SYNC_TOLERANCE, value))
 
 
-def auto_sync_interval_days(choice: str, drift_rate_per_day, tolerance: int) -> float:
+def auto_sync_interval_days(
+    choice: str, drift_rate_per_day: float | None, tolerance: int
+) -> float:
     """Days between automatic syncs.
 
     Adaptive mode divides the tolerated error by the observed drift rate, so a
@@ -124,10 +102,7 @@ def auto_sync_interval_days(choice: str, drift_rate_per_day, tolerance: int) -> 
     """
     if choice == AUTO_SYNC_ADAPTIVE:
         rate = abs(drift_rate_per_day) if drift_rate_per_day else 0.0
-        if rate < 1e-6:
-            days = AUTO_SYNC_BOOTSTRAP_DAYS
-        else:
-            days = tolerance / rate
+        days = AUTO_SYNC_BOOTSTRAP_DAYS if rate < 1e-6 else tolerance / rate
     else:
         try:
             days = float(choice)

@@ -45,8 +45,7 @@ from .const import (
     MAX_SCAN_INTERVAL,
     MIN_AUTO_SYNC_TOLERANCE,
     MIN_SCAN_INTERVAL,
-    auto_sync_choice,
-    scan_interval_minutes_for_ui,
+    scan_interval_minutes,
 )
 from .device import device_for
 
@@ -243,11 +242,8 @@ class OptionsFlowHandler(OptionsFlowWithReload):
             return self.async_create_entry(title="", data=user_input)
 
         suggested_values = {**self.config_entry.data, **self.config_entry.options}
-        # Migrates the legacy auto_sync_hours value to the day-based choice.
-        suggested_values[CONF_AUTO_SYNC] = auto_sync_choice(suggested_values)
-        # Legacy installs stored seconds; the selector is minutes now.
         if CONF_SCAN_INTERVAL in suggested_values:
-            suggested_values[CONF_SCAN_INTERVAL] = scan_interval_minutes_for_ui(
+            suggested_values[CONF_SCAN_INTERVAL] = scan_interval_minutes(
                 suggested_values[CONF_SCAN_INTERVAL]
             )
 

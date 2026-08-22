@@ -287,25 +287,3 @@ def test_diagnostic_sensors_available_when_poll_failed():
     assert failure_count.native_value == 2
     assert last_failure.available is True
     assert last_failure.native_value == coord.data.last_failure
-
-
-def test_retired_clock_drift_entity_is_removed():
-    """0.1.x created a clock_drift sensor; it must not linger as unavailable."""
-    from custom_components.xiaomi_lywsd import _async_remove_retired_entities
-
-    hass = MagicMock()
-    entry = MagicMock()
-    registry = MagicMock()
-    registry.async_get_entity_id.return_value = "sensor.lywsd02_16c5c4_clock_drift"
-
-    with patch(
-        "homeassistant.helpers.entity_registry.async_get", return_value=registry
-    ):
-        _async_remove_retired_entities(hass, entry, "1638C5C4")
-
-    registry.async_get_entity_id.assert_called_once_with(
-        "sensor", "xiaomi_lywsd", "xiaomi_lywsd_1638C5C4_clock_drift"
-    )
-    registry.async_remove.assert_called_once_with(
-        "sensor.lywsd02_16c5c4_clock_drift"
-    )

@@ -13,7 +13,6 @@ from custom_components.xiaomi_lywsd.const import (
     AUTO_SYNC_MAX_DAYS,
     AUTO_SYNC_MIN_DAYS,
     CONF_AUTO_SYNC,
-    CONF_AUTO_SYNC_HOURS,
     auto_sync_choice,
     auto_sync_interval_days,
 )
@@ -108,12 +107,7 @@ def test_fixed_interval_choices_are_days():
     assert auto_sync_interval_days("30", 999.0, 60) == pytest.approx(30.0)
 
 
-def test_legacy_hours_option_is_migrated():
-    assert auto_sync_choice({CONF_AUTO_SYNC_HOURS: 0}) == "0"
-    assert auto_sync_choice({CONF_AUTO_SYNC_HOURS: 24}) == "1"
-    assert auto_sync_choice({CONF_AUTO_SYNC_HOURS: 168}) == "7"
-    # An explicit new value always wins over the legacy key.
-    assert (
-        auto_sync_choice({CONF_AUTO_SYNC: "90", CONF_AUTO_SYNC_HOURS: 24}) == "90"
-    )
+def test_auto_sync_choice_falls_back_to_default():
+    assert auto_sync_choice({CONF_AUTO_SYNC: "90"}) == "90"
     assert auto_sync_choice({}) == AUTO_SYNC_ADAPTIVE
+    assert auto_sync_choice({CONF_AUTO_SYNC: "nonsense"}) == AUTO_SYNC_ADAPTIVE

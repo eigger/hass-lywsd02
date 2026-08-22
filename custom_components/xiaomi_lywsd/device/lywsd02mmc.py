@@ -28,11 +28,12 @@ UUID_UNITS = "ebe0ccbe-7a0a-4b0c-8a1a-6ff2997da3a6"
 UUID_DATA = "ebe0ccc1-7a0a-4b0c-8a1a-6ff2997da3a6"
 UUID_BATTERY = "ebe0ccc4-7a0a-4b0c-8a1a-6ff2997da3a6"
 
-# Measured on LYWSD02MMC (A4:C1:38:16:C5:C4): stock read was 0x00 while
-# the E-Ink shows °C. h4/lywsd02 used 0xFF for °C — accept both on decode;
-# write the measured 0x00 for celsius.
+# Measured on LYWSD02MMC (A4:C1:38:16:C5:C4): stock read was 0x00 while the
+# E-Ink showed °C. h4/lywsd02 and ashald/home-assistant-lywsd02 both use 0xFF.
+# Firmware revisions differ, so decode accepts either and write uses the
+# measured value.
 UNIT_CELSIUS = b"\x00"
-UNIT_CELSIUS_LEGACY = b"\xff"  # h4/lywsd02 community write value
+UNIT_CELSIUS_ALT = b"\xff"
 UNIT_FAHRENHEIT = b"\x01"
 
 UNITS_TO_CODE = {
@@ -41,7 +42,7 @@ UNITS_TO_CODE = {
 }
 CODE_TO_UNITS = {
     UNIT_CELSIUS: "celsius",
-    UNIT_CELSIUS_LEGACY: "celsius",
+    UNIT_CELSIUS_ALT: "celsius",
     UNIT_FAHRENHEIT: "fahrenheit",
 }
 
