@@ -36,7 +36,7 @@ class LywsdData:
     battery: int | None = None
     units: str | None = None
     last_sync: datetime | None = None
-    last_drift_seconds: float | None = None
+    clock_drift: float | None = None
     failure_count: int = 0
     last_failure: datetime | None = None
     consecutive_auto_failures: int = 0
@@ -197,7 +197,7 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             battery=battery if battery is not None else previous.battery,
             units=units if units is not None else previous.units,
             last_sync=previous.last_sync,
-            last_drift_seconds=previous.last_drift_seconds,
+            clock_drift=previous.clock_drift,
             failure_count=0,
             last_failure=previous.last_failure,
             consecutive_auto_failures=previous.consecutive_auto_failures,

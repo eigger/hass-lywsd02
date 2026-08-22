@@ -262,7 +262,7 @@ async def _service_sync_time(
     async def _op(client, device):
         result = await device.set_time(client, dt_util.now(), offset)
         coordinator.data.last_sync = dt_util.now()
-        coordinator.data.last_drift_seconds = result.drift_seconds
+        coordinator.data.clock_drift = result.drift_seconds
         return result
 
     try:
@@ -471,7 +471,7 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
             offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
             result = await device.set_time(client, dt_util.now(), offset)
             coordinator.data.last_sync = dt_util.now()
-            coordinator.data.last_drift_seconds = result.drift_seconds
+            coordinator.data.clock_drift = result.drift_seconds
             coordinator.data.consecutive_auto_failures = 0
             return result
 

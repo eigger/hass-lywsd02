@@ -212,7 +212,7 @@ async def test_button_success_does_not_mark_update_success():
 
     async def fake_execute(hass, entry, op, **kwargs):
         entry.runtime_data.data.last_sync = datetime.now(timezone.utc)
-        entry.runtime_data.data.last_drift_seconds = 0.0
+        entry.runtime_data.data.clock_drift = 0.0
         return MagicMock(drift_seconds=0.0)
 
     with patch(
@@ -228,6 +228,7 @@ async def test_button_success_does_not_mark_update_success():
     assert coord._set_updated_calls == before_sets
     assert coord._listener_calls == 1
     assert coord.data.last_sync is not None
+    assert coord.data.clock_drift == 0.0
     assert coord.data.temperature == 21.5
 
 
@@ -264,9 +265,13 @@ def test_diagnostic_sensors_available_when_poll_failed():
     coord.data.last_sync = datetime.now(timezone.utc)
     coord.data.failure_count = 2
     coord.data.last_failure = datetime.now(timezone.utc)
+    coord.data.clock_drift = -12.5
 
     temp = LywsdSensor(coord, CLIMATE_SENSORS[0])
     last_sync = LywsdSensor(coord, DIAGNOSTIC_SENSORS[0])
+    clock_drift = LywsdSensor(
+        coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "clock_drift")
+    )
     failure_count = LywsdSensor(
         coord, next(d for d in DIAGNOSTIC_SENSORS if d.key == "failure_count")
     )
@@ -277,6 +282,8 @@ def test_diagnostic_sensors_available_when_poll_failed():
     assert temp.available is False
     assert last_sync.available is True
     assert last_sync.native_value == coord.data.last_sync
+    assert clock_drift.available is True
+    assert clock_drift.native_value == -12.5
     assert failure_count.available is True
     assert failure_count.native_value == 2
     assert last_failure.available is True

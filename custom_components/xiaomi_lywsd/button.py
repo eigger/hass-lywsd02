@@ -79,7 +79,7 @@ class LywsdSyncTimeButton(ButtonEntity):
             )
             coord = self._entry.runtime_data
             coord.data.last_sync = dt_util.now()
-            coord.data.last_drift_seconds = result.drift_seconds
+            coord.data.clock_drift = result.drift_seconds
             return result
 
         try:
