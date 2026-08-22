@@ -17,7 +17,11 @@ from homeassistant.util import dt as dt_util
 
 from . import async_execute
 from .const import MANUFACTURER, MODEL, TIME_FORMAT_OPTIONS
-from .device import LywsdUnsupportedError, LywsdVerifyError
+from .device import (
+    LywsdClockRepairError,
+    LywsdUnsupportedError,
+    LywsdVerifyError,
+)
 from .types import LywsdConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -121,13 +125,14 @@ class LywsdDisplayUnitsSelect(_LywsdSelectBase):
 class LywsdTimeFormatSelect(_LywsdSelectBase):
     """12h / 24h E-Ink clock mode.
 
-    The device gives no read-back for this setting, so the state is optimistic
-    and restored across restarts. Not every firmware revision implements the
-    command; a device that rejects it surfaces a clear error instead of failing
-    silently.
+    Experimental: the 0xAA/0x00 payloads are still unverified against hardware
+    (see docs/protocol.md), the device offers no read-back, and firmware that
+    simply ignores the command is indistinguishable from success. Disabled by
+    default until measured; state is optimistic and restored across restarts.
     """
 
     _attr_options = TIME_FORMATS
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
         super().__init__(hass, entry, "time_format")
@@ -166,14 +171,23 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
 
         try:
             await async_execute(self.hass, self._entry, _op)
-            coordinator.record_action_success()
             await coordinator.async_after_sync()
+            coordinator.record_action_success()
+        except LywsdClockRepairError as err:
+            # The mode very likely changed; only the clock repair failed, so
+            # keep the new option and tell the user to run a sync.
+            coordinator.record_failure()
+            raise HomeAssistantError(
+                "표시 모드는 바뀌었지만 시계 복구에 실패했습니다. "
+                "화면이 1970년이면 시간 동기화를 실행하세요."
+            ) from err
         except Exception as err:
             coordinator.data.time_format = previous
             coordinator.record_failure()
             if isinstance(err, LywsdUnsupportedError):
                 raise HomeAssistantError(
-                    "이 기기의 펌웨어는 12/24시간 전환을 지원하지 않습니다"
+                    "기기가 12/24시간 전환 명령을 거부했습니다 "
+                    "(이 펌웨어는 지원하지 않을 수 있습니다)"
                 ) from err
             if isinstance(err, HomeAssistantError):
                 raise

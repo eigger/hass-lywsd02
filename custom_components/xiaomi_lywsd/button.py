@@ -84,8 +84,9 @@ class LywsdSyncTimeButton(ButtonEntity):
 
         try:
             await async_execute(self.hass, self._entry, _op)
-            self._entry.runtime_data.record_action_success()
+            # Reschedule before publishing so next_sync is the new one.
             await self._entry.runtime_data.async_after_sync()
+            self._entry.runtime_data.record_action_success()
         except Exception as err:
             self._entry.runtime_data.record_failure()
             _reraise_action_error("sync time", err)

@@ -227,3 +227,22 @@ async def test_auto_sync_backs_off_after_failures():
     assert second_retry == now + timedelta(
         seconds=AUTO_SYNC_RETRY_BASE_SECONDS * 2
     )
+
+
+def test_next_sync_is_published_to_listeners():
+    """Entities are already up when setup arms the timer, so it must notify."""
+    hass = MagicMock()
+    entry = _auto_sync_entry({CONF_AUTO_SYNC: "7"})
+    coordinator = entry.runtime_data
+    coordinator.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
+
+    with patch("custom_components.xiaomi_lywsd.async_track_point_in_time"), patch(
+        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    ):
+        _async_setup_auto_sync(hass, entry)
+
+    assert coordinator.data.next_sync == dt.datetime(
+        2026, 1, 8, tzinfo=dt.timezone.utc
+    )
+    coordinator.async_update_listeners.assert_called()

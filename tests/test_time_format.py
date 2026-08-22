@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.xiaomi_lywsd.coordinator import LywsdCoordinator
-from custom_components.xiaomi_lywsd.device import Lywsd02mmc, LywsdUnsupportedError
+from custom_components.xiaomi_lywsd.device import (
+    Lywsd02mmc,
+    LywsdClockRepairError,
+    LywsdUnsupportedError,
+)
 from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
     UUID_TIME,
     encode_time,
@@ -94,7 +98,7 @@ async def test_select_reverts_and_explains_on_unsupported_device():
         new_callable=AsyncMock,
         side_effect=LywsdUnsupportedError("nope"),
     ):
-        with pytest.raises(HomeAssistantError, match="지원하지 않습니다"):
+        with pytest.raises(HomeAssistantError, match="거부했습니다"):
             await select.async_select_option("12h")
 
     assert coordinator.data.time_format == "24h"
@@ -119,3 +123,61 @@ async def test_select_persists_choice_on_success():
     assert select.current_option == "12h"
     reloaded = await coordinator.store.async_load()
     assert reloaded["time_format"] == "12h"
+
+
+@pytest.mark.asyncio
+async def test_dropped_link_is_not_reported_as_unsupported():
+    """A disconnect mid-write says nothing about what the firmware implements."""
+    device = Lywsd02mmc()
+    client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
+
+    async def drop(uuid, data, response=False):
+        client.is_connected = False
+        raise RuntimeError("connection lost")
+
+    client.write_gatt_char = drop
+
+    with pytest.raises(RuntimeError, match="connection lost"):
+        await device.set_time_format(client, "24h", WHEN, 9)
+
+
+@pytest.mark.asyncio
+async def test_failed_clock_repair_is_its_own_error():
+    """Mode landed, clock write did not — the display may read 1970."""
+    device = Lywsd02mmc()
+    epoch = int(WHEN.timestamp())
+    client = FakeBleakClient({UUID_TIME: encode_time(epoch, 9)})
+    calls = {"n": 0}
+    real_write = client.write_gatt_char
+
+    async def fail_second(uuid, data, response=False):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return await real_write(uuid, data, response=response)
+        raise RuntimeError("write failed")
+
+    client.write_gatt_char = fail_second
+
+    with pytest.raises(LywsdClockRepairError):
+        await device.set_time_format(client, "12h", WHEN, 9)
+
+
+@pytest.mark.asyncio
+async def test_select_keeps_option_when_only_the_clock_repair_failed():
+    hass, entry = _entry()
+    coordinator = entry.runtime_data
+    coordinator.data.time_format = "24h"
+    select = LywsdTimeFormatSelect(hass, entry)
+
+    async def fake_execute(hass_, entry_, op, **kwargs):
+        coordinator.data.time_format = "12h"
+        raise LywsdClockRepairError("boom")
+
+    with patch(
+        "custom_components.xiaomi_lywsd.select.async_execute", new=fake_execute
+    ):
+        with pytest.raises(HomeAssistantError, match="시계 복구에 실패"):
+            await select.async_select_option("12h")
+
+    # Not rolled back: the mode almost certainly did change.
+    assert coordinator.data.time_format == "12h"

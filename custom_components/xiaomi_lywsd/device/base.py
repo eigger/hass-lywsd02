@@ -20,6 +20,14 @@ class LywsdUnsupportedError(LywsdDeviceError):
     """The device firmware does not implement this feature."""
 
 
+class LywsdClockRepairError(LywsdDeviceError):
+    """A mode command landed but the follow-up clock write did not.
+
+    Distinct because the display may now be showing 1970 and the user has to
+    run a sync — silently reporting a generic failure would hide that.
+    """
+
+
 @dataclass(frozen=True)
 class ClimateReading:
     """One temperature/humidity sample from GATT notify."""

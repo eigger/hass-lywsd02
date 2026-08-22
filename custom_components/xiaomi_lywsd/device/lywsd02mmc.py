@@ -14,6 +14,7 @@ from typing import ClassVar
 
 from .base import (
     ClimateReading,
+    LywsdClockRepairError,
     LywsdDevice,
     LywsdDeviceError,
     LywsdUnsupportedError,
@@ -184,18 +185,30 @@ class Lywsd02mmc(LywsdDevice):
 
         The mode command carries a zero epoch in the same characteristic used
         for time. On firmware that does not recognise the 7-byte form the write
-        either fails outright (raised as unsupported) or is taken as a time
-        write — hence the unconditional re-sync on the same connection, which
-        repairs the clock before the caller ever sees it.
+        either fails outright or is taken as a time write — hence the
+        unconditional re-sync on the same connection, which repairs the clock
+        before the caller ever sees it.
+
+        A device that is still connected but refused the write is reported as
+        unsupported; a dropped link is re-raised as-is, because a transport
+        failure says nothing about what the firmware implements.
         """
         payload = encode_time_format(time_format)
         try:
             await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
         except Exception as err:
+            if not getattr(client, "is_connected", True):
+                raise
             raise LywsdUnsupportedError(
                 f"device rejected the {time_format} clock mode command: {err}"
             ) from err
-        return await self.set_time(client, when, tz_offset_hours)
+
+        try:
+            return await self.set_time(client, when, tz_offset_hours)
+        except Exception as err:
+            raise LywsdClockRepairError(
+                f"clock mode was written but the follow-up time write failed: {err}"
+            ) from err
 
     async def get_units(self, client) -> str:
         raw = await client.read_gatt_char(UUID_UNITS)

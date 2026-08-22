@@ -275,8 +275,11 @@ async def _service_sync_time(
 
     try:
         await async_execute(hass, entry, _op)
-        coordinator.record_action_success()
+        # Reschedule first: record_action_success publishes next_sync, and the
+        # old value would otherwise stick until the next climate poll — which
+        # never comes in clock-only mode.
         await coordinator.async_after_sync()
+        coordinator.record_action_success()
     except Exception as err:
         coordinator.record_failure()
         if isinstance(err, LywsdVerifyError):
@@ -535,6 +538,9 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
         _cancel()
         coordinator.data.next_sync = when
         state["unsub"] = async_track_point_in_time(hass, _fire, when)
+        # Entities are already up by the time setup arms this, so the value
+        # only reaches the UI if listeners are told.
+        coordinator.async_update_listeners()
 
     def _due_at() -> datetime:
         now = dt_util.now()

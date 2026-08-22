@@ -192,7 +192,10 @@ def test_default_scan_interval_is_30_minutes():
     assert DEFAULT_CLIMATE_SENSORS is False
     assert DEFAULT_SCAN_INTERVAL == 30
     assert scan_interval_seconds(30) == 1800
-    # Out-of-range values clamp instead of being trusted.
+    # Out-of-range values clamp instead of being trusted. A 0.1.x install that
+    # stored seconds (e.g. 1800) therefore lands on the 60-minute ceiling —
+    # accepted, since climate polling is off by default.
+    assert scan_interval_minutes(1800) == 60
     assert scan_interval_minutes(999) == 60
     assert scan_interval_minutes(0) == 2
     assert scan_interval_minutes(None) == 30
