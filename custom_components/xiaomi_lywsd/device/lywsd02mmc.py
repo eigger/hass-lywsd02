@@ -190,12 +190,15 @@ class Lywsd02mmc(LywsdDevice):
         before the caller ever sees it.
 
         A device that is still connected but refused the write is reported as
-        unsupported; a dropped link is re-raised as-is, because a transport
-        failure says nothing about what the firmware implements.
+        unsupported. A dropped link or a timeout is re-raised as-is: neither
+        says anything about what the firmware implements, and mislabelling them
+        would send the user hunting for a firmware problem that is not there.
         """
         payload = encode_time_format(time_format)
         try:
             await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
+        except (TimeoutError, asyncio.CancelledError):
+            raise
         except Exception as err:
             if not getattr(client, "is_connected", True):
                 raise

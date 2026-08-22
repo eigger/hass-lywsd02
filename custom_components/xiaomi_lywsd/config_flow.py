@@ -118,7 +118,8 @@ def _title_for(address: str) -> str:
 class LywsdConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Xiaomi LYWSD."""
 
-    VERSION = 1
+    # 2: auto_sync_hours -> auto_sync (days/"auto"), scan_interval -> minutes.
+    VERSION = 2
 
     def __init__(self) -> None:
         super().__init__()

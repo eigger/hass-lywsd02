@@ -181,3 +181,18 @@ async def test_select_keeps_option_when_only_the_clock_repair_failed():
 
     # Not rolled back: the mode almost certainly did change.
     assert coordinator.data.time_format == "12h"
+
+
+@pytest.mark.asyncio
+async def test_timeout_is_not_reported_as_unsupported():
+    """A slow link is not a firmware verdict either."""
+    device = Lywsd02mmc()
+    client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
+
+    async def stall(uuid, data, response=False):
+        raise TimeoutError("no response")
+
+    client.write_gatt_char = stall
+
+    with pytest.raises(TimeoutError):
+        await device.set_time_format(client, "24h", WHEN, 9)

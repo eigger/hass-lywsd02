@@ -64,7 +64,7 @@
         }
       },
       "time_format": {
-        "name": "Clock mode (E-Ink)",
+        "name": "Clock mode (E-Ink, experimental)",
         "state": {
           "12h": "12-hour",
           "24h": "24-hour"

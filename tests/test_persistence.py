@@ -13,7 +13,6 @@ from custom_components.xiaomi_lywsd.const import (
     AUTO_SYNC_MAX_DAYS,
     AUTO_SYNC_MIN_DAYS,
     CONF_AUTO_SYNC,
-    CONF_AUTO_SYNC_HOURS_LEGACY_OFF,
     auto_sync_choice,
     auto_sync_interval_days,
 )
@@ -112,20 +111,3 @@ def test_auto_sync_choice_falls_back_to_default():
     assert auto_sync_choice({CONF_AUTO_SYNC: "90"}) == "90"
     assert auto_sync_choice({}) == AUTO_SYNC_ADAPTIVE
     assert auto_sync_choice({CONF_AUTO_SYNC: "nonsense"}) == AUTO_SYNC_ADAPTIVE
-
-
-def test_deliberate_legacy_off_is_honoured():
-    """0.1.x defaulted to off; renaming the key must not start writes."""
-    assert auto_sync_choice({CONF_AUTO_SYNC_HOURS_LEGACY_OFF: 0}) == "0"
-    assert auto_sync_choice({CONF_AUTO_SYNC_HOURS_LEGACY_OFF: "0"}) == "0"
-    # Only "off" is honoured — other legacy values take the new default.
-    assert (
-        auto_sync_choice({CONF_AUTO_SYNC_HOURS_LEGACY_OFF: 24}) == AUTO_SYNC_ADAPTIVE
-    )
-    # An explicit new value always wins.
-    assert (
-        auto_sync_choice(
-            {CONF_AUTO_SYNC: "90", CONF_AUTO_SYNC_HOURS_LEGACY_OFF: 0}
-        )
-        == "90"
-    )

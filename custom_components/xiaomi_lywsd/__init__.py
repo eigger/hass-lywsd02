@@ -34,11 +34,17 @@ from homeassistant.helpers.issue_registry import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    AUTO_SYNC_CHOICES,
     AUTO_SYNC_DISABLED,
     AUTO_SYNC_RETRY_BASE_SECONDS,
     AUTO_SYNC_RETRY_MAX_SECONDS,
     CONF_RETRY_COUNT,
     DEFAULT_RETRY_COUNT,
+    CONF_AUTO_SYNC,
+    CONF_AUTO_SYNC_HOURS_V1,
+    CONF_SCAN_INTERVAL,
+    MAX_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
     STARTUP_SYNC_DELAY_SECONDS,
     auto_sync_choice,
     auto_sync_interval_days,
@@ -66,6 +72,59 @@ T = TypeVar("T")
 SERVICE_SYNC_TIME = "sync_time"
 SERVICE_READ_STATE = "read_state"
 SERVICE_DUMP_GATT = "dump_gatt"
+
+
+def _auto_sync_from_v1_hours(raw: object) -> str:
+    """Map the 0.1.x hours option onto a day-based choice.
+
+    A missing key means the 0.1.x default, which was **off** — the 0.2 default
+    is not. Getting this wrong would start BLE writes on every upgraded install
+    that simply left the default alone.
+    """
+    if raw is None:
+        return AUTO_SYNC_DISABLED
+    try:
+        hours = int(raw)
+    except (TypeError, ValueError):
+        return AUTO_SYNC_DISABLED
+    if hours <= 0:
+        return AUTO_SYNC_DISABLED
+    days = max(1, round(hours / 24))
+    numeric = [c for c in AUTO_SYNC_CHOICES if c.isdigit() and c != AUTO_SYNC_DISABLED]
+    return min(numeric, key=lambda c: abs(int(c) - days))
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:
+    """Stamp pre-0.2 entries with explicit values for the renamed options.
+
+    Doing it once here keeps ``auto_sync_choice`` and ``scan_interval_minutes``
+    free of compatibility branches: after this runs, an absent key can only
+    mean a 0.2 entry.
+    """
+    if entry.version >= 2:
+        return True
+
+    options = dict(entry.options)
+    options[CONF_AUTO_SYNC] = _auto_sync_from_v1_hours(
+        options.pop(CONF_AUTO_SYNC_HOURS_V1, None)
+    )
+
+    # 0.1.x stored the poll interval in seconds; the option is minutes now.
+    raw_interval = options.get(CONF_SCAN_INTERVAL)
+    if raw_interval is not None:
+        try:
+            seconds = int(raw_interval)
+        except (TypeError, ValueError):
+            options.pop(CONF_SCAN_INTERVAL, None)
+        else:
+            minutes = seconds // 60 if seconds >= 120 else seconds
+            options[CONF_SCAN_INTERVAL] = max(
+                MIN_SCAN_INTERVAL, min(MAX_SCAN_INTERVAL, minutes)
+            )
+
+    hass.config_entries.async_update_entry(entry, options=options, version=2)
+    _LOGGER.debug("Migrated %s to entry version 2: %s", entry.entry_id, options)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:

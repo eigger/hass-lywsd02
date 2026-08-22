@@ -86,6 +86,17 @@ entities:
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
 | `next_sync` | When the next automatic sync is scheduled |
 
+## Upgrading from 0.1.x
+
+Config entries are migrated to version 2 on first load: `auto_sync_hours`
+becomes the day-based `auto_sync` choice (**an install that never touched the
+options stays off**, matching the 0.1.x default), and a poll interval stored in
+seconds becomes minutes.
+
+`sensor.*_clock_drift` is no longer created — its values moved onto `last_sync`
+attributes. The old entity stays in the registry as unavailable until deleted by
+hand.
+
 ## Development
 
 ```bash

@@ -15,9 +15,8 @@ CONF_CLIMATE_SENSORS = "climate_sensors"
 CONF_RETRY_COUNT = "retry_count"
 CONF_AUTO_SYNC = "auto_sync"
 CONF_AUTO_SYNC_TOLERANCE = "auto_sync_tolerance"
-# 0.1.x key, read only to honour a deliberate "off". Not a migration path:
-# any other value falls through to the new default rather than being converted.
-CONF_AUTO_SYNC_HOURS_LEGACY_OFF = "auto_sync_hours"
+# 0.1.x option, converted once by async_migrate_entry and never read at runtime.
+CONF_AUTO_SYNC_HOURS_V1 = "auto_sync_hours"
 
 DEFAULT_RETRY_COUNT = 3
 
@@ -81,22 +80,11 @@ def scan_interval_seconds(raw: int | None) -> int:
 def auto_sync_choice(options: dict) -> str:
     """Return the auto-sync option, falling back to the default.
 
-    An install that deliberately switched sync off under the 0.1.x option must
-    not start writing to the device again just because the key was renamed —
-    the new default is on. Only that one case is honoured; every other legacy
-    value takes the new default.
+    Entries created before 0.2.0 are stamped with an explicit value by
+    ``async_migrate_entry``, so an absent key here always means a 0.2 entry
+    that has not been configured — never a 0.1.x install that had sync off.
     """
-    raw = options.get(CONF_AUTO_SYNC)
-    if raw is None:
-        legacy = options.get(CONF_AUTO_SYNC_HOURS_LEGACY_OFF)
-        if legacy is not None:
-            try:
-                if int(legacy) <= 0:
-                    return AUTO_SYNC_DISABLED
-            except (TypeError, ValueError):
-                pass
-        return DEFAULT_AUTO_SYNC
-    value = str(raw)
+    value = str(options.get(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC))
     return value if value in AUTO_SYNC_CHOICES else DEFAULT_AUTO_SYNC
 
 
