@@ -42,6 +42,8 @@ class LywsdData:
     time_format: str | None = None
     last_sync: datetime | None = None
     clock_drift: float | None = None
+    # Seconds the last write added for link latency + rounding.
+    write_compensation: float | None = None
     # Seconds the device clock gains/loses per day, averaged over syncs.
     drift_rate_per_day: float | None = None
     next_sync: datetime | None = None
@@ -176,7 +178,12 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         except Exception as err:  # pragma: no cover - defensive
             _LOGGER.warning("LYWSD %s: store save failed: %s", self.address, err)
 
-    def note_sync(self, drift_seconds: float, when: datetime) -> None:
+    def note_sync(
+        self,
+        drift_seconds: float,
+        when: datetime,
+        compensation: float | None = None,
+    ) -> None:
         """Record a successful clock write and update the observed drift rate.
 
         ``drift_seconds`` is how far the device clock had wandered since the
@@ -207,6 +214,8 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
                     )
         self.data.last_sync = when
         self.data.clock_drift = drift_seconds
+        if compensation is not None:
+            self.data.write_compensation = compensation
 
     async def async_after_sync(self) -> None:
         """Persist and re-arm the auto-sync timer after any successful sync."""
@@ -281,6 +290,7 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             time_format=previous.time_format,
             last_sync=previous.last_sync,
             clock_drift=previous.clock_drift,
+            write_compensation=previous.write_compensation,
             drift_rate_per_day=previous.drift_rate_per_day,
             next_sync=previous.next_sync,
             auto_sync_mode=previous.auto_sync_mode,

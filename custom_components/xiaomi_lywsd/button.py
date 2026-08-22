@@ -78,7 +78,11 @@ class LywsdSyncTimeButton(ButtonEntity):
                 client, dt_util.now(), tz_offset_hours
             )
             coord = self._entry.runtime_data
-            coord.note_sync(result.drift_seconds, dt_util.now())
+            coord.note_sync(
+                result.drift_seconds,
+                dt_util.now(),
+                result.compensation_seconds,
+            )
             await async_read_battery_into(client, device, coord)
             return result
 

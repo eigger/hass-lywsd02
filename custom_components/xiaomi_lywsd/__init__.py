@@ -349,7 +349,9 @@ async def _service_sync_time(
 
     async def _op(client, device):
         result = await device.set_time(client, dt_util.now(), offset)
-        coordinator.note_sync(result.drift_seconds, dt_util.now())
+        coordinator.note_sync(
+            result.drift_seconds, dt_util.now(), result.compensation_seconds
+        )
         await async_read_battery_into(client, device, coordinator)
         return result
 
@@ -571,7 +573,9 @@ async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
         utcoffset = now.utcoffset()
         offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
         result = await device.set_time(client, now, offset)
-        coordinator.note_sync(result.drift_seconds, dt_util.now())
+        coordinator.note_sync(
+            result.drift_seconds, dt_util.now(), result.compensation_seconds
+        )
         coordinator.data.consecutive_auto_failures = 0
         await async_read_battery_into(client, device, coordinator)
         return result

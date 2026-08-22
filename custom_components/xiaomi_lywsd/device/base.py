@@ -43,6 +43,9 @@ class SyncResult:
     written_epoch: int
     read_back_epoch: int
     drift_seconds: float  # device clock - HA clock, measured before write
+    # Seconds added to the sampled time to land on target despite link latency
+    # and the device's whole-second storage. Diagnostic only.
+    compensation_seconds: float = 0.0
 
 
 class LywsdDevice(ABC):

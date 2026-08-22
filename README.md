@@ -101,6 +101,16 @@ spawning more entities:
 | --- | --- |
 | `drift_seconds` | Error measured just before that correction |
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
+| `write_compensation_seconds` | Seconds added to the sampled time so it lands correct despite link latency. A proxy hop typically costs one or two |
+
+The clock is written to the second it will *arrive*, not the second it was
+sampled. A GATT read round trip and the outbound write each take a few hundred
+milliseconds over an ESPHome proxy, and the device stores whole seconds — left
+uncompensated those errors all point the same way and leave the display a few
+seconds behind. The elapsed time is measured on a monotonic clock, half the
+observed read round trip is added as the outbound estimate, and the result is
+rounded rather than floored. What remains is the device's own one-second
+resolution.
 
 `sensor.*_next_sync` — when the next automatic sync is due. The state is
 `unknown` when automatic sync is off, which the attributes state outright so
