@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+import time
 from datetime import datetime, timezone
 from typing import ClassVar
 
@@ -151,31 +152,62 @@ class Lywsd02mmc(LywsdDevice):
         return decode_climate(holder["payload"])
 
     async def set_time(
-        self, client, when: datetime, tz_offset_hours: int
+        self, client, when: datetime, tz_offset_hours: int, *, monotonic=time.monotonic
     ) -> SyncResult:
+        """Write the wall clock, compensating for the trip it takes to get there.
+
+        ``when`` is the instant the caller sampled, not the instant the write
+        lands. Between the two sit a GATT read round trip and the outbound write
+        — hundreds of milliseconds each over an ESPHome proxy — and the device
+        stores whole seconds, so truncating instead of rounding threw away up to
+        another one. All three errors point the same way, leaving the display
+        seconds *behind* real time.
+
+        So the elapsed time is measured on a monotonic clock, half the observed
+        read round trip is added as an estimate of the outbound leg, and the
+        result is rounded rather than floored. What is left is the device's own
+        one-second resolution.
+        """
+        started = monotonic()
         before = await client.read_gatt_char(UUID_TIME)
+        read_rtt = monotonic() - started
+        # The value in that response was true at roughly the midpoint of the
+        # round trip, not when the request left.
+        one_way = read_rtt / 2.0
         before_epoch, _ = decode_time(before)
 
         if when.tzinfo is None:
             when_utc = when.replace(tzinfo=timezone.utc)
         else:
             when_utc = when.astimezone(timezone.utc)
-        written_epoch = int(when_utc.timestamp())
-        drift_seconds = float(before_epoch - written_epoch)
+        base_ts = when_utc.timestamp()
+
+        # Compare like with like: the device reading is from base_ts + one_way.
+        drift_seconds = float(before_epoch - (base_ts + one_way))
+
+        # Aim at the moment the write will arrive, not the moment it is built.
+        elapsed = monotonic() - started
+        written_epoch = round(base_ts + elapsed + one_way)
+        compensation = written_epoch - int(base_ts)
 
         payload = encode_time(written_epoch, tz_offset_hours)
         await client.write_gatt_char(UUID_TIME, payload, response=WRITE_RESPONSE)
 
         after = await client.read_gatt_char(UUID_TIME)
         after_epoch, _ = decode_time(after)
-        if abs(after_epoch - written_epoch) > TIME_VERIFY_TOLERANCE:
+        # The device has been ticking since the write landed, so check it
+        # against the current time rather than against what was written.
+        expected_now = base_ts + (monotonic() - started) - one_way
+        if abs(after_epoch - expected_now) > TIME_VERIFY_TOLERANCE:
             raise LywsdVerifyError(
-                f"time read-back mismatch: wrote {written_epoch}, read {after_epoch}"
+                f"time read-back mismatch: expected ~{expected_now:.1f}, "
+                f"read {after_epoch}"
             )
         return SyncResult(
             written_epoch=written_epoch,
             read_back_epoch=after_epoch,
             drift_seconds=drift_seconds,
+            compensation_seconds=float(compensation),
         )
 
     async def set_time_format(

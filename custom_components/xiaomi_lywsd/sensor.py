@@ -168,6 +168,9 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
             return {
                 "drift_seconds": data.clock_drift,
                 "drift_seconds_per_day": rate,
+                # How much the last write added for link latency and rounding.
+                # A proxy hop typically costs a second or two.
+                "write_compensation_seconds": data.write_compensation,
             }
         if self.entity_description.key == "next_sync":
             # An empty state means automatic sync is off, so say so outright

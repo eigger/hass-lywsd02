@@ -152,13 +152,15 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
     async def async_select_option(self, option: str) -> None:
         coordinator = self._entry.runtime_data
         previous = coordinator.data.time_format
-        now = dt_util.now()
-        utcoffset = now.utcoffset()
+        utcoffset = dt_util.now().utcoffset()
         tz_offset_hours = (
             int(utcoffset.total_seconds() // 3600) if utcoffset else 0
         )
 
         async def _op(client, device):
+            # Sampled inside the op: taking it before async_execute would age
+            # the timestamp by the whole connection setup before it is written.
+            now = dt_util.now()
             # set_time_format rewrites the clock on the same connection, so a
             # firmware that mistakes the mode command for a time write cannot
             # leave the display stuck in 1970.
@@ -166,7 +168,11 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
                 client, option, now, tz_offset_hours
             )
             coordinator.data.time_format = option
-            coordinator.note_sync(result.drift_seconds, dt_util.now())
+            coordinator.note_sync(
+                result.drift_seconds,
+                dt_util.now(),
+                result.compensation_seconds,
+            )
             await async_read_battery_into(client, device, coordinator)
             return option
 
