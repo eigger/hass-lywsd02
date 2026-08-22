@@ -1,0 +1,116 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select LYWSD02 device",
+        "description": "This integration reads temperature/humidity/battery over GATT and can sync the E-Ink clock. Core Xiaomi BLE usually cannot provide climate values for this model (MiBeacon object_include=0).",
+        "data": {
+          "address": "Device"
+        }
+      },
+      "bluetooth_confirm": {
+        "description": "Do you want to set up {name}?"
+      },
+      "manual": {
+        "title": "Enter MAC address",
+        "description": "No devices were discovered. Enter the Bluetooth MAC address (AA:BB:CC:DD:EE:FF). The device does not need to be in range right now.",
+        "data": {
+          "address": "MAC address"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "not_supported": "This device is not a supported LYWSD02 / LYWSD02MMC",
+      "no_devices_found": "No LYWSD02 devices found"
+    },
+    "error": {
+      "invalid_mac": "Invalid MAC address. Use AA:BB:CC:DD:EE:FF format."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xiaomi LYWSD options",
+        "data": {
+          "scan_interval": "Poll interval",
+          "climate_sensors": "Create temperature / humidity / battery sensors",
+          "retry_count": "BLE write retry count",
+          "auto_sync_hours": "Automatic time sync interval"
+        },
+        "data_description": {
+          "scan_interval": "How often to connect and read climate over GATT. Minimum 120 seconds.",
+          "climate_sensors": "Turn off if core Xiaomi BLE already provides climate for this device and you only need clock control.",
+          "retry_count": "Number of connection attempts before failing a write.",
+          "auto_sync_hours": "0 = disabled. Shorter than 24 h is not offered to protect battery life."
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "sync_time": {
+        "name": "Sync time"
+      }
+    },
+    "select": {
+      "display_units": {
+        "name": "Display units (E-Ink)",
+        "state": {
+          "celsius": "Celsius (°C)",
+          "fahrenheit": "Fahrenheit (°F)"
+        }
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "humidity": {
+        "name": "Humidity"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "last_sync": {
+        "name": "Last sync"
+      },
+      "clock_drift": {
+        "name": "Clock drift"
+      },
+      "failure_count": {
+        "name": "Failure count"
+      },
+      "last_failure": {
+        "name": "Last failure"
+      }
+    }
+  },
+  "services": {
+    "sync_time": {
+      "name": "Sync time",
+      "description": "Write the current time to the E-Ink clock.",
+      "fields": {
+        "timezone_offset": {
+          "name": "Timezone offset (hours)",
+          "description": "Optional UTC offset in hours (-12 to 14). Defaults to the Home Assistant timezone."
+        }
+      }
+    },
+    "read_state": {
+      "name": "Read state",
+      "description": "Connect once and refresh display units from the device.",
+      "fields": {}
+    }
+  },
+  "issues": {
+    "no_connectable_scanner": {
+      "title": "No connectable Bluetooth scanner",
+      "description": "Xiaomi LYWSD needs a connectable Bluetooth adapter or an ESPHome Bluetooth proxy with `active: true` to poll climate and write time/units.\n\n```yaml\nesp32_ble_tracker:\nbluetooth_proxy:\n  active: true\n```"
+    },
+    "proxy_not_active": {
+      "title": "Bluetooth proxy is not active",
+      "description": "The device is visible only via a non-connectable scanner. Enable active connections on the ESPHome Bluetooth proxy:\n\n```yaml\nesp32_ble_tracker:\nbluetooth_proxy:\n  active: true\n```"
+    }
+  }
+}

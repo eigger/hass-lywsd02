@@ -1,0 +1,45 @@
+{
+  "services": {
+    "sync_time": {
+      "service": "mdi:clock-check-outline"
+    },
+    "read_state": {
+      "service": "mdi:refresh"
+    }
+  },
+  "entity": {
+    "button": {
+      "sync_time": {
+        "default": "mdi:clock-check-outline"
+      }
+    },
+    "select": {
+      "display_units": {
+        "default": "mdi:temperature-celsius"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "default": "mdi:thermometer"
+      },
+      "humidity": {
+        "default": "mdi:water-percent"
+      },
+      "battery": {
+        "default": "mdi:battery"
+      },
+      "last_sync": {
+        "default": "mdi:clock-outline"
+      },
+      "clock_drift": {
+        "default": "mdi:clock-alert-outline"
+      },
+      "failure_count": {
+        "default": "mdi:alert-circle"
+      },
+      "last_failure": {
+        "default": "mdi:clock-alert"
+      }
+    }
+  }
+}

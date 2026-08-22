@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a problem with Xiaomi LYWSD
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        코어 `xiaomi_ble` 온·습도 이슈는 이 저장소가 아니라 Home Assistant 코어로 제보해 주세요.
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Mi Home / GATT Device Information (0x2A26)에 표시된 펌웨어 버전. 필수.
+      placeholder: "e.g. 1.0.0_00XX"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Device model / advertisement name
+      placeholder: "LYWSD02MMC"
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection path
+      options:
+        - Built-in Bluetooth adapter
+        - ESPHome Bluetooth proxy (active: true)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell

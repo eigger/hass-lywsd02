@@ -1,0 +1,20 @@
+sync_time:
+  target:
+    entity:
+      integration: xiaomi_lywsd
+  fields:
+    timezone_offset:
+      required: false
+      example: 9
+      selector:
+        number:
+          min: -12
+          max: 14
+          step: 1
+          mode: box
+
+read_state:
+  target:
+    entity:
+      integration: xiaomi_lywsd
+  fields: {}
