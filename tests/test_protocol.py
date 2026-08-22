@@ -51,8 +51,12 @@ def test_decode_time_4_byte_payload():
 
 
 def test_units_roundtrip():
+    assert encode_units("celsius") == b"\x00"
+    assert encode_units("fahrenheit") == b"\x01"
     assert decode_units(encode_units("celsius")) == "celsius"
     assert decode_units(encode_units("fahrenheit")) == "fahrenheit"
+    # Legacy community °C byte still decodes.
+    assert decode_units(b"\xff") == "celsius"
 
 
 @pytest.mark.asyncio
@@ -87,7 +91,7 @@ async def test_set_time_verify_error_on_mismatch():
 @pytest.mark.asyncio
 async def test_set_units_rolls_back_on_verify_failure():
     client = FakeBleakClient(
-        {UUID_UNITS: b"\xff"},
+        {UUID_UNITS: b"\x00"},
         reject={UUID_UNITS},
     )
     # First write is rejected (store unchanged). Rollback write must still be attempted.
@@ -95,10 +99,10 @@ async def test_set_units_rolls_back_on_verify_failure():
     device = Lywsd02mmc()
     with pytest.raises(LywsdVerifyError):
         await device.set_units(client, "fahrenheit")
-    # At least one write of 0x01 (attempt) and one of original 0xff (rollback)
+    # At least one write of 0x01 (attempt) and one of original 0x00 (rollback)
     payloads = [w[1] for w in client.writes if w[0] == UUID_UNITS]
     assert b"\x01" in payloads
-    assert b"\xff" in payloads
+    assert b"\x00" in payloads
 
 
 def test_device_for_names():

@@ -19,7 +19,7 @@ from .const import (
     DEFAULT_CLIMATE_SENSORS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    MIN_SCAN_INTERVAL,
+    scan_interval_seconds,
 )
 from .device import LywsdDevice
 from .device.lywsd02mmc import DEFAULT_CLIMATE_TIMEOUT
@@ -69,11 +69,10 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         # Clock-only mode must not open a BLE session every scan_interval —
         # that was burning battery while no climate entity consumed the values.
         if climate_on:
-            scan_interval = max(
-                MIN_SCAN_INTERVAL,
-                int(options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
+            seconds = scan_interval_seconds(
+                options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
             )
-            update_interval: timedelta | None = timedelta(seconds=scan_interval)
+            update_interval: timedelta | None = timedelta(seconds=seconds)
         else:
             update_interval = None
         super().__init__(

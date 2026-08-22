@@ -19,7 +19,7 @@ def _coord():
     entry = MagicMock()
     entry.entry_id = "e1"
     entry.data = {"address": "AA:BB:CC:DD:EE:FF"}
-    entry.options = {"scan_interval": 1800, "retry_count": 1}
+    entry.options = {"scan_interval": 30, "retry_count": 1}
     entry.unique_id = "AA:BB:CC:DD:EE:FF"
     coord = LywsdCoordinator(
         hass,

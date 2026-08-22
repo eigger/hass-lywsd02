@@ -84,15 +84,16 @@
 | 항목 | 값 | 상태 |
 | --- | --- | --- |
 | UUID | `ebe0ccbe-7a0a-4b0c-8a1a-6ff2997da3a6` | 커뮤니티 |
-| °C 코드 (작업용) | `0xFF` | **미검증** — h4/lywsd02 `UNITS` dict |
-| °F 코드 (작업용) | `0x01` | **미검증** — h4/lywsd02 `UNITS` dict |
+| °C 코드 | `0x00` | **실측** — LYWSD02MMC `A4:C1:38:16:C5:C4` 기본 read |
+| °C 코드 (레거시 decode) | `0xFF` | h4/lywsd02 dict — read 호환만, write는 `0x00` |
+| °F 코드 | `0x01` | **미검증 write** — h4/lywsd02 dict (화면 육안 대기) |
 | 화면 반영 지연 | 미측정 | |
 
-**작업용 가정 (코드에 반영):** `0xFF` → celsius, `0x01` → fahrenheit.
-실측에서 반대면 이 절과 `device/lywsd02mmc.py`를 함께 수정한다.
-알 수 없는 바이트(예: `0x00`)는 추측 매핑하지 않고 `LywsdDeviceError`로 올린다.
+**코드 반영:** decode `0x00`/`0xFF` → celsius, `0x01` → fahrenheit.
+write celsius → `0x00`, fahrenheit → `0x01`.
+h4 주석(`0x00`=F / `0x01`=C)과는 충돌하므로, °F write는 select로 화면 확인이 필요.
 
-절차: `python tools/probe_units.py <MAC>` → 화면 육안 → 원복 확인.
+절차: 개발자 도구 `dump_gatt` / select °F → 화면 육안 → 원복.
 
 ---
 
@@ -122,6 +123,6 @@
 - [ ] 온습도 첫 notify 지연 / plain read 가능 여부
 - [ ] 시간 write `response=True/False` 실측
 - [ ] tz int8 부호 실측 (음수 오프셋)
-- [ ] 단위 코드 °C/°F 화면 육안 확정
+- [ ] 단위 °F write (`0x01`) 화면 육안 확정
 - [ ] ESPHome 프록시(`active: true`) 경유 write/notify 성공/실패
 - [ ] MMC vs 비-MMC 펌웨어 편차

@@ -239,21 +239,22 @@ class LywsdData:
 
 ### 3.2 스캔 주기
 
-- `CONF_SCAN_INTERVAL`, `DEFAULT_SCAN_INTERVAL = 1800` (30분). CR2032 코인셀 기준 보수적 기본값.
-- 하한 **120초**. 그 이하는 셀렉터에서 선택할 수 없게 막는다. E-Ink 시계 자체가 화면을 1분 단위로
+- `CONF_SCAN_INTERVAL`, `DEFAULT_SCAN_INTERVAL = 30` (**분**). CR2032 코인셀 기준 보수적 기본값.
+  UI 단위는 `min`, 범위 2–60. 예전 설치는 초(≥120)로 저장돼 있을 수 있어 코디네이터가 호환 변환한다.
+- 하한 **2분**. 그 이하는 셀렉터에서 선택할 수 없게 막는다. E-Ink 시계 자체가 화면을 1분 단위로
   갱신하므로 그보다 촘촘히 읽을 이유가 없고, 배터리만 깎는다.
 - **LYWSD02 / LYWSD02MMC는 CR2032 코인셀**이다 (AAA가 아님). BLE 연결 유지 시간이 곧 소모이므로
   폴링 예산을 타이트하게 잡는다. README에 장기 수명 데이터가 아직 없다고 명시한다.
 - `CONF_CLIMATE_SENSORS=False`면 `update_interval=None` — **폴링을 완전히 끈다** (엔티티만 숨기고
-  10분마다 연결하던 버그를 피한다).
-
+  주기마다 연결하던 버그를 피한다).
+- `CONF_AUTO_SYNC_HOURS` 기본값 **0** (비활성). 옵션으로 24h / 7d.
 ### 3.3 코어 `xiaomi_ble`와의 관계
 
 - **중복 위험은 낮지만 0은 아니다.** 사용자의 기기에서는 코어가 값을 못 주지만, 다른 펌웨어/
   다른 개체에서는 코어가 정상 동작할 수 있다. 이 경우 온습도 센서가 두 벌 생긴다.
-- 대응: config flow / options에 `CONF_CLIMATE_SENSORS` (기본 **True**). 끄면 온습도/배터리
-  엔티티를 만들지 않고 **주기적 GATT 폴링도 중지**하며 시계 제어만 남는다. 초판의 "센서
-  최소주의"는 이 옵션으로 살아남는다.
+- 대응: config flow / options에 `CONF_CLIMATE_SENSORS` (기본 **False** — 시계 전용).
+  켜면 온습도/배터리 엔티티를 만들고 주기적 GATT 폴링을 시작한다. 끄면 엔티티도 폴링도 없다.
+  초판의 "센서 최소주의"가 기본값이 된다.
 - **연결 경합은 없다.** §0.3(3) — 코어는 이 device_id를 폴링하지 않는다.
 - 같은 BLE 주소를 `connections={(CONNECTION_BLUETOOTH, address)}`로 쓰므로 두 통합의 엔티티가
   **하나의 디바이스 카드에 합쳐진다.** `manufacturer="Xiaomi"`, `model="LYWSD02MMC"`로 맞춘다.
@@ -565,8 +566,8 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 3. `OPTIONS_SCHEMA` (config flow와 options flow가 공유 — niimbot 관례):
    | 키 | 셀렉터 | 기본값 |
    | --- | --- | --- |
-   | `CONF_SCAN_INTERVAL` | number, min 120 / max 3600 / step 60, unit `s` | 1800 |
-   | `CONF_CLIMATE_SENSORS` | boolean | `True` |
+   | `CONF_SCAN_INTERVAL` | number, min 2 / max 60 / step 1, unit `min` | 30 |
+   | `CONF_CLIMATE_SENSORS` | boolean | `False` |
    | `CONF_RETRY_COUNT` | number, min 1 / max 5 | 3 |
    `CONF_AUTO_SYNC_HOURS`는 T8에서 추가.
    `CONF_CLIMATE_SENSORS`의 `data_description`에 §3.3의 중복 설명을 쓴다.
@@ -713,7 +714,7 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 
 **변경.**
 
-- `CONF_AUTO_SYNC_HOURS`, `DEFAULT_AUTO_SYNC_HOURS = 24` (매일; `0` = 비활성).
+- `CONF_AUTO_SYNC_HOURS`, `DEFAULT_AUTO_SYNC_HOURS = 0` (비활성; 옵션 24 / 168).
   셀렉터는 `select`로 `0 / 24 / 168` (비활성 / 매일 / 매주). **24시간 미만 옵션을 제공하지 않는다.**
 - `async_track_time_interval` 등록, 취소 콜백을 `entry.async_on_unload()`에 전달.
 - 자동 경로 실패는 **`HomeAssistantError`를 올리지 않는다.** `_LOGGER.debug`만, 연속 3회 실패부터

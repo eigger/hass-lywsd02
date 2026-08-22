@@ -39,7 +39,9 @@ from .const import (
     DEFAULT_RETRY_COUNT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    scan_interval_minutes_for_ui,
 )
 from .device import device_for
 
@@ -49,10 +51,10 @@ OPTIONS_SCHEMA = {
     vol.Required(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): NumberSelector(
         NumberSelectorConfig(
             min=MIN_SCAN_INTERVAL,
-            max=3600,
-            step=60,
+            max=MAX_SCAN_INTERVAL,
+            step=1,
             mode=NumberSelectorMode.BOX,
-            unit_of_measurement="s",
+            unit_of_measurement="min",
         )
     ),
     vol.Required(
@@ -227,6 +229,11 @@ class OptionsFlowHandler(OptionsFlowWithReload):
         if CONF_AUTO_SYNC_HOURS in suggested_values:
             suggested_values[CONF_AUTO_SYNC_HOURS] = str(
                 suggested_values[CONF_AUTO_SYNC_HOURS]
+            )
+        # Legacy installs stored seconds; the selector is minutes now.
+        if CONF_SCAN_INTERVAL in suggested_values:
+            suggested_values[CONF_SCAN_INTERVAL] = scan_interval_minutes_for_ui(
+                suggested_values[CONF_SCAN_INTERVAL]
             )
 
         return self.async_show_form(

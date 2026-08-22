@@ -33,16 +33,16 @@
       "init": {
         "title": "Xiaomi LYWSD options",
         "data": {
-          "scan_interval": "Poll interval",
-          "climate_sensors": "Create temperature / humidity / battery sensors",
+          "scan_interval": "Poll interval (minutes)",
+          "climate_sensors": "Enable temperature / humidity / battery sensors",
           "retry_count": "BLE write retry count",
           "auto_sync_hours": "Automatic time sync interval"
         },
         "data_description": {
-          "scan_interval": "How often to connect and read climate over GATT when climate sensors are enabled. Default 30 minutes (CR2032). Minimum 120 seconds.",
-          "climate_sensors": "When off, no temperature/humidity/battery entities are created and periodic GATT polling stops (clock control only).",
+          "scan_interval": "How often to connect and read climate over GATT when climate sensors are enabled. Default 30 minutes (CR2032). Range 2–60 minutes.",
+          "climate_sensors": "Off by default (clock-only). When on, creates climate entities and starts periodic GATT polling. Sensors become available after the first successful reading.",
           "retry_count": "Number of connection attempts before failing a write.",
-          "auto_sync_hours": "How often to write the Home Assistant clock to the device. Default every 24 hours. 0 = disabled."
+          "auto_sync_hours": "How often to write the Home Assistant clock to the device. Default off. Shorter than 24 hours is not offered."
         }
       }
     }

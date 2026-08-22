@@ -12,8 +12,12 @@ from custom_components.xiaomi_lywsd.device.base import LywsdDeviceError
 
 
 def test_decode_units_unknown_includes_hex():
-    with pytest.raises(LywsdDeviceError, match="hex=00"):
-        decode_units(b"\x00")
+    with pytest.raises(LywsdDeviceError, match="hex=02"):
+        decode_units(b"\x02")
+
+
+def test_decode_units_measured_celsius_zero():
+    assert decode_units(b"\x00") == "celsius"
 
 
 @pytest.mark.asyncio

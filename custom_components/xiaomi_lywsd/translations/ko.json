@@ -33,16 +33,16 @@
       "init": {
         "title": "Xiaomi LYWSD 옵션",
         "data": {
-          "scan_interval": "폴링 주기",
-          "climate_sensors": "온도 / 습도 / 배터리 센서 생성",
+          "scan_interval": "폴링 주기 (분)",
+          "climate_sensors": "온도 / 습도 / 배터리 센서 사용",
           "retry_count": "BLE 쓰기 재시도 횟수",
           "auto_sync_hours": "자동 시간 동기화 주기"
         },
         "data_description": {
-          "scan_interval": "기후 센서가 켜져 있을 때 GATT로 온습도를 읽는 주기입니다. 기본 30분(CR2032). 최소 120초.",
-          "climate_sensors": "끄면 온습도/배터리 엔티티를 만들지 않고 주기적 GATT 폴링도 멈춥니다(시계 제어만).",
+          "scan_interval": "기후 센서가 켜져 있을 때 GATT로 온습도를 읽는 주기입니다. 기본 30분(CR2032). 범위 2–60분.",
+          "climate_sensors": "기본 끔(시계 제어만). 켜면 온습도/배터리 엔티티를 만들고 주기적 GATT 폴링을 시작합니다. 첫 성공 읽기 후 센서가 available이 됩니다.",
           "retry_count": "쓰기 실패로 판정하기 전 연결 시도 횟수입니다.",
-          "auto_sync_hours": "Home Assistant 시각을 기기에 쓰는 주기입니다. 기본 24시간. 0 = 비활성."
+          "auto_sync_hours": "Home Assistant 시각을 기기에 쓰는 주기입니다. 기본 끔. 24시간 미만 옵션은 없습니다."
         }
       }
     }

@@ -171,10 +171,15 @@ def test_climate_sensors_off_disables_polling():
 
 
 def test_default_scan_interval_is_30_minutes():
-    from custom_components.xiaomi_lywsd.const import DEFAULT_SCAN_INTERVAL
+    from custom_components.xiaomi_lywsd.const import (
+        DEFAULT_AUTO_SYNC_HOURS,
+        DEFAULT_CLIMATE_SENSORS,
+        DEFAULT_SCAN_INTERVAL,
+        scan_interval_seconds,
+    )
 
-    hass, entry, coord = _coord()
-    entry.options = {}
+    hass, entry, _coord_unused = _coord()
+    entry.options = {"climate_sensors": True}
     coord2 = LywsdCoordinator(
         hass,
         entry,
@@ -182,8 +187,25 @@ def test_default_scan_interval_is_30_minutes():
         hass.data["xiaomi_lywsd"]["lock"],
         Lywsd02mmc(),
     )
-    assert DEFAULT_SCAN_INTERVAL == 1800
+    assert DEFAULT_AUTO_SYNC_HOURS == 0
+    assert DEFAULT_CLIMATE_SENSORS is False
+    assert DEFAULT_SCAN_INTERVAL == 30
+    assert scan_interval_seconds(30) == 1800
+    assert scan_interval_seconds(1800) == 1800  # legacy seconds
     assert coord2.update_interval.total_seconds() == 1800
+
+
+def test_default_options_disable_climate_polling():
+    hass, entry, coord = _coord()
+    entry.options = {}
+    coord_default = LywsdCoordinator(
+        hass,
+        entry,
+        "AA:BB:CC:DD:EE:FF",
+        hass.data["xiaomi_lywsd"]["lock"],
+        Lywsd02mmc(),
+    )
+    assert coord_default.update_interval is None
 
 
 @pytest.mark.asyncio

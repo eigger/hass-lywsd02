@@ -50,13 +50,13 @@ bluetooth_proxy:
 
 ## Options
 
-- **Poll interval** (default 1800 s / 30 min, minimum 120 s) — LYWSD02 uses a
-  **CR2032** coin cell; BLE connect time dominates drain. Long-term life data
-  is still missing
-- **Create climate sensors** (default on) — when off, climate entities are not
-  created **and periodic GATT polling stops** (clock-only mode)
-- BLE retries, automatic time sync (default **every 24 hours** / 7d / off)
-
+- **Enable climate sensors** (default **off**) — creates temperature /
+  humidity / battery entities and starts GATT polling. Sensors stay
+  unavailable until the first successful reading
+- **Poll interval** (default **30 minutes**, range 2–60) — only used when
+  climate sensors are enabled. LYWSD02 uses a **CR2032** coin cell; BLE
+  connect time dominates drain
+- BLE retries, automatic time sync (default **off** / 24h / 7d)
 ## Development
 
 ```bash
