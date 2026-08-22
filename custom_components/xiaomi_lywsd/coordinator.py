@@ -14,6 +14,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    AUTO_SYNC_FULL_WEIGHT_DAYS,
+    AUTO_SYNC_MAX_SAMPLE_WEIGHT,
     AUTO_SYNC_MIN_RATE_SAMPLE_DAYS,
     CONF_CLIMATE_SENSORS,
     CONF_SCAN_INTERVAL,
@@ -180,6 +182,13 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         ``drift_seconds`` is how far the device clock had wandered since the
         previous sync, so dividing by the elapsed days gives a per-day rate that
         adaptive scheduling can turn back into an interval.
+
+        A sample counts for as much as its duration earns. The clock reads in
+        whole seconds, so a 12-hour sample carries ±2 s/day of quantisation
+        error against a typical rate of a few s/day — enough to move the
+        interval by weeks. Weighting by duration lets a manual sync between two
+        automatic ones update the estimate without dominating it, while samples
+        of a week or more keep the plain average they always had.
         """
         previous = self.data.last_sync
         if previous is not None:
@@ -187,10 +196,15 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             if elapsed_days >= AUTO_SYNC_MIN_RATE_SAMPLE_DAYS:
                 rate = drift_seconds / elapsed_days
                 known = self.data.drift_rate_per_day
-                # Smooth so one odd reading cannot swing the interval wildly.
-                self.data.drift_rate_per_day = (
-                    rate if known is None else (known + rate) / 2.0
-                )
+                if known is None:
+                    self.data.drift_rate_per_day = rate
+                else:
+                    weight = AUTO_SYNC_MAX_SAMPLE_WEIGHT * min(
+                        1.0, elapsed_days / AUTO_SYNC_FULL_WEIGHT_DAYS
+                    )
+                    self.data.drift_rate_per_day = (
+                        known * (1.0 - weight) + rate * weight
+                    )
         self.data.last_sync = when
         self.data.clock_drift = drift_seconds
 
