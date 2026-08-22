@@ -46,6 +46,14 @@ AUTO_SYNC_MIN_DAYS = 1.0
 AUTO_SYNC_MAX_DAYS = 180.0
 # Two syncs closer together than this are too noisy to derive a rate from.
 AUTO_SYNC_MIN_RATE_SAMPLE_DAYS = 0.5
+# The device clock has one-second resolution, so a sample's accuracy is set by
+# how long it ran: ±1 s over 12 hours is ±2 s/day, over a week it is ±0.14.
+# Samples reach full weight at a week; shorter ones are scaled down in
+# proportion so a manual sync between automatic ones cannot swing the estimate.
+AUTO_SYNC_FULL_WEIGHT_DAYS = 7.0
+# Weight of a full-confidence sample against the running estimate. 0.5 keeps
+# the plain average that long samples have always used.
+AUTO_SYNC_MAX_SAMPLE_WEIGHT = 0.5
 
 # Grace period after startup before a due sync fires, so the Bluetooth stack
 # and any ESPHome proxies have settled.

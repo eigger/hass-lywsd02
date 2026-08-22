@@ -133,3 +133,64 @@ async def test_battery_survives_a_restart():
     second = _coordinator("entry-battery")
     await second.async_load_persisted()
     assert second.data.battery == 63
+
+
+def test_long_samples_keep_the_plain_average():
+    """The weighting must not change what a normal automatic cycle does."""
+    coordinator = _coordinator()
+    coordinator.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=UTC)
+    coordinator.note_sync(70.0, dt.datetime(2026, 1, 8, tzinfo=UTC))  # 10/day
+    assert coordinator.data.drift_rate_per_day == pytest.approx(10.0)
+    coordinator.note_sync(14.0, dt.datetime(2026, 1, 15, tzinfo=UTC))  # 2/day
+    assert coordinator.data.drift_rate_per_day == pytest.approx(6.0)
+
+
+def test_a_short_manual_sync_barely_moves_the_estimate():
+    """12 hours of a 1-second clock is ±2 s/day of noise — it must not get the
+    same say as a week of measurement."""
+    coordinator = _coordinator()
+    coordinator.data.drift_rate_per_day = 3.0
+    coordinator.data.last_sync = dt.datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+
+    # A wildly wrong short reading: 4 s over 12 h reads as 8 s/day.
+    coordinator.note_sync(4.0, dt.datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
+
+    # Old 50/50 blend would have landed on 5.5 and nearly halved the interval.
+    assert coordinator.data.drift_rate_per_day == pytest.approx(3.18, abs=0.01)
+
+
+def test_repeated_manual_syncs_cannot_run_away_with_the_estimate():
+    coordinator = _coordinator()
+    coordinator.data.drift_rate_per_day = 3.0
+    when = dt.datetime(2026, 1, 1, tzinfo=UTC)
+    coordinator.data.last_sync = when
+
+    for _ in range(10):
+        when += dt.timedelta(hours=13)
+        coordinator.note_sync(5.0, when)  # ~9.2 s/day each time
+
+    # Ten noisy presses drift the estimate but do not replace it.
+    assert 3.0 < coordinator.data.drift_rate_per_day < 6.0
+
+
+def test_sample_weight_rises_with_duration():
+    """Same measured rate, different durations — the longer one moves more."""
+    rates = []
+    for hours, drift in ((12, 4.0), (72, 24.0), (168, 56.0)):  # all 8 s/day
+        coordinator = _coordinator()
+        coordinator.data.drift_rate_per_day = 3.0
+        start = dt.datetime(2026, 1, 1, tzinfo=UTC)
+        coordinator.data.last_sync = start
+        coordinator.note_sync(drift, start + dt.timedelta(hours=hours))
+        rates.append(coordinator.data.drift_rate_per_day)
+
+    assert rates == sorted(rates)
+    assert rates[-1] == pytest.approx(5.5)  # a full week is the plain average
+
+
+def test_first_sample_is_taken_whatever_its_length():
+    """With nothing to blend against, the only reading available is the estimate."""
+    coordinator = _coordinator()
+    coordinator.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=UTC)
+    coordinator.note_sync(4.0, dt.datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
+    assert coordinator.data.drift_rate_per_day == pytest.approx(8.0)

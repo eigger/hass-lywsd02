@@ -73,6 +73,17 @@ months on its own, a sloppy one keeps a short cycle. Until two syncs have been
 observed it falls back to 7 days; a clock that holds to within the device's
 one-second resolution goes straight to the 180-day ceiling.
 
+Each sample counts for as much as its duration earns. The clock reads in whole
+seconds, so twelve hours of it carries about ±2 s/day of rounding error while a
+week carries ±0.14 — samples reach full weight at a week and shorter ones scale
+down in proportion. Pressing **Sync time** by hand between automatic syncs
+therefore refines the estimate without derailing it.
+
+A manual sync is a real sync: it corrects the clock, updates `last_sync`, and
+**restarts the countdown**, so the next automatic one is a full interval from
+when you pressed it rather than from the previous automatic sync. Watch
+`sensor.*_next_sync` move.
+
 The schedule is **stored on disk**, so restarting Home Assistant does not restart
 the countdown — a 30-day interval still fires on day 30 even on a box that
 reboots weekly. A sync that came due while Home Assistant was down runs shortly
