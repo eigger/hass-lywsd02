@@ -57,6 +57,23 @@ async def test_last_sync_survives_a_restart():
 
 
 @pytest.mark.asyncio
+async def test_measured_drift_survives_a_restart():
+    """A clock-only install measures drift once a sync — up to 180 days apart.
+    An unknown drift sensor for months after every restart is worse than a
+    value the attached timestamp lets the reader age for themselves."""
+    first = _coordinator("entry-drift")
+    measured_at = dt.datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
+    first.note_sync(-12.5, measured_at, 1.4, 0.5)
+    await first.async_save_persisted()
+
+    second = _coordinator("entry-drift")
+    await second.async_load_persisted()
+
+    assert second.data.observed_drift == 0.5
+    assert second.data.clock_checked == measured_at
+
+
+@pytest.mark.asyncio
 async def test_load_without_stored_file_keeps_defaults():
     coordinator = _coordinator("entry-never-saved")
     await coordinator.async_load_persisted()

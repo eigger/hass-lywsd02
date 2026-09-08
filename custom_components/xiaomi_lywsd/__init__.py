@@ -42,13 +42,19 @@ from .const import (
     DEFAULT_RETRY_COUNT,
     CONF_AUTO_SYNC,
     CONF_AUTO_SYNC_HOURS_V1,
+    CONF_CLIMATE_SENSORS,
     CONF_SCAN_INTERVAL,
+    DEFAULT_CLIMATE_SENSORS,
+    DEFAULT_SCAN_INTERVAL,
+    DRIFT_CHECK_GRACE_SECONDS,
+    DRIFT_SYNC_SKIP_MARGIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
     STARTUP_SYNC_DELAY_SECONDS,
     auto_sync_choice,
     auto_sync_interval_days,
     auto_sync_tolerance_seconds,
+    scan_interval_seconds,
     DOMAIN,
     LOCK,
     MANUFACTURER,
@@ -350,7 +356,10 @@ async def _service_sync_time(
     async def _op(client, device):
         result = await device.set_time(client, dt_util.now(), offset)
         coordinator.note_sync(
-            result.drift_seconds, dt_util.now(), result.compensation_seconds
+            result.drift_seconds,
+            dt_util.now(),
+            result.compensation_seconds,
+            result.residual_seconds,
         )
         await async_read_battery_into(client, device, coordinator)
         return result
@@ -564,9 +573,52 @@ def _auto_sync_interval(coordinator, options: dict) -> timedelta:
     return timedelta(days=days)
 
 
-async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
-    """One quiet automatic sync. Never raises into the scheduler."""
+def _clock_recently_verified(coordinator, options: dict) -> bool:
+    """Has a climate poll just read the clock and found it good enough?
+
+    A scheduled sync exists to correct an error nobody has measured. When
+    climate polling is on, one has: every poll reads the clock on a connection
+    it was opening anyway. If that reading was recent and comfortably inside
+    the tolerance, opening a whole connection to write a clock that is already
+    right is the one cost worth avoiding on a coin cell.
+
+    "Recent" is one poll interval plus a grace period — any longer and the next
+    poll would have refreshed it — and "comfortably" is half the tolerance, so
+    the drift accumulated since the reading cannot make the decision wrong.
+    """
+    if not bool(options.get(CONF_CLIMATE_SENSORS, DEFAULT_CLIMATE_SENSORS)):
+        return False
+    checked = coordinator.data.clock_checked
+    drift = coordinator.data.observed_drift
+    if checked is None or drift is None:
+        return False
+    fresh_for = (
+        scan_interval_seconds(options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+        + DRIFT_CHECK_GRACE_SECONDS
+    )
+    if (dt_util.now() - checked).total_seconds() > fresh_for:
+        return False
+    margin = auto_sync_tolerance_seconds(options) * DRIFT_SYNC_SKIP_MARGIN
+    return abs(drift) <= margin
+
+
+async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:
+    """One quiet automatic sync. Never raises into the scheduler.
+
+    Returns True when the sync was skipped because a poll had just verified the
+    clock — the caller must then restart the interval from now rather than from
+    ``last_sync``, which did not move.
+    """
     coordinator = entry.runtime_data
+    options = {**entry.data, **entry.options}
+
+    if _clock_recently_verified(coordinator, options):
+        _LOGGER.debug(
+            "LYWSD %s: scheduled sync skipped, poll measured %.1fs of drift",
+            coordinator.address,
+            coordinator.data.observed_drift,
+        )
+        return True
 
     async def _op(client, device):
         now = dt_util.now()
@@ -574,7 +626,10 @@ async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
         offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
         result = await device.set_time(client, now, offset)
         coordinator.note_sync(
-            result.drift_seconds, dt_util.now(), result.compensation_seconds
+            result.drift_seconds,
+            dt_util.now(),
+            result.compensation_seconds,
+            result.residual_seconds,
         )
         coordinator.data.consecutive_auto_failures = 0
         await async_read_battery_into(client, device, coordinator)
@@ -590,10 +645,11 @@ async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
             _LOGGER.warning(
                 "Automatic time sync failed 3 times for %s", coordinator.address
             )
-        return
+        return False
 
     coordinator.record_action_success()
     await coordinator.async_save_persisted()
+    return False
 
 
 def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
@@ -659,11 +715,18 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
 
     async def _fire(_now: datetime) -> None:
         state["unsub"] = None
-        await _run_auto_sync(hass, entry)
+        skipped = await _run_auto_sync(hass, entry)
         if coordinator.data.consecutive_auto_failures:
             # last_sync did not move, so _due_at() would be permanently overdue
             # and retry every startup-delay — back off instead.
             _schedule(_retry_at())
+        elif skipped:
+            # Nothing was written, so last_sync did not move here either. The
+            # clock was verified rather than corrected, which is just as good a
+            # reason to start the full interval over from now.
+            _schedule(
+                dt_util.now() + _auto_sync_interval(coordinator, options)
+            )
         else:
             _schedule(_due_at())
 

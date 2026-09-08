@@ -79,7 +79,7 @@ Configure via **Settings** → **Devices & Services** → **Xiaomi LYWSD** → *
 | **Enable climate sensors** | Off | on/off | Creates Temperature / Humidity entities and starts periodic GATT polling. They stay unavailable until the first successful reading |
 | **Poll interval** | 30 min | 2–60 min | Only used when climate sensors are enabled. LYWSD02 uses a **CR2032** coin cell; BLE connect time dominates drain |
 | **Automatic time sync** | Automatic | off / 1 / 7 / 30 / 90 / 180 days / automatic | How often to write the Home Assistant clock to the device |
-| **Tolerated clock error** | 60 s | 10–3600 s | Automatic mode only |
+| **Tolerated clock error** | 60 s | 10–3600 s | Sets the Automatic interval, and is the threshold the drift check syncs on |
 | **BLE retry count** | 3 | 1–10 | Retries when a BLE write fails |
 
 > [!TIP]
@@ -117,6 +117,38 @@ whichever direction the link latency happens to fall. The next boundary the
 write can still reach is chosen, and the write is held back until that boundary
 minus one estimated one-way trip, so the device receives second T at second T.
 
+### Drift check on the climate poll
+
+With climate sensors enabled, a connection is already open every poll interval,
+and **the connection is what costs battery** — a 5-byte clock read on top of it
+is one round trip. So every poll reads the clock, and **syncs on that same
+connection** the moment the error exceeds the tolerated clock error. Nothing is
+deferred to the schedule: rescheduling would only mean opening a second
+connection later to do what this one could already do.
+
+It works the other way too. When a poll has just measured an error well inside
+the tolerance, the sync it was scheduled to do is **skipped** and the interval
+starts over — a whole connection saved, on the evidence that there was nothing
+to correct.
+
+What this catches that no schedule can: a **battery change or a firmware reset**
+that sends the display to 1970 is noticed within one poll instead of within one
+sync interval, which on an accurate unit can be six months.
+
+Two guards, because the read is cheap and the write is not:
+
+- If the clock is still out of tolerance **less than an hour after a sync**, the
+  write is not repeated and a warning is logged once. A write that does not take
+  points at the firmware — most likely an epoch that is local rather than UTC
+  (see [`docs/protocol.md`](docs/protocol.md) §3), which would read as a
+  constant timezone-sized error no write can close. Please report it.
+- A clock read or write that fails never fails the poll. Climate is the poll's
+  job; the next poll retries, and the schedule stays armed as the safety net.
+
+Clock-only installs (climate sensors off — the default) never poll, so nothing
+changes for them: the adaptive schedule remains the only thing that opens a
+connection.
+
 ### Clock diagnostics
 
 Two timestamp sensors, each carrying its context as attributes rather than
@@ -129,6 +161,10 @@ spawning more entities:
 | `drift_seconds` | Error measured just before that correction |
 | `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
 | `write_compensation_seconds` | Seconds between the sampled time and the boundary aimed at — link latency plus the wait for the boundary |
+
+**Clock drift** — the device clock's error in seconds, as last *measured*: signed, so positive means the display is running fast. It is a sensor rather than an attribute because the shape over time is the point — with climate polling on it ramps up between syncs and snaps back at each one, and a unit whose ramp steepens is a unit whose battery is going. `clock_checked` (also an attribute here) says when the reading was taken.
+
+The value after a sync is the one the write's own read-back measured, not an assumed zero — the device stores whole seconds, so landing exactly on target is luck rather than the norm. Without climate polling the sensor updates once per sync.
 
 **Next sync** — when the next automatic sync is due. `unknown` when automatic sync is off; the attributes say so outright.
 
@@ -150,6 +186,7 @@ to alert on a device whose clock is no longer being corrected.
 | Sensor | Temperature / Humidity | Periodic GATT poll; requires **Enable climate sensors** |
 | Sensor | Battery | Read on any open connection, including automatic sync |
 | Sensor | Last sync / Next sync | Diagnostic; drift and schedule attributes (see [Clock diagnostics](#clock-diagnostics)) |
+| Sensor | Clock drift | Diagnostic; the measured clock error in seconds, updated on every poll and every sync |
 | Sensor | Failure count / Last failure | Diagnostic |
 | Sensor | Connection duration | Diagnostic; seconds the last/current BLE session stayed open |
 | Binary sensor | Connectivity | BLE session open / closed |

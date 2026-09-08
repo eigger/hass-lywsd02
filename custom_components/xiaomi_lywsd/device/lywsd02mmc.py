@@ -16,6 +16,7 @@ from typing import ClassVar
 
 from .base import (
     ClimateReading,
+    ClockReading,
     LywsdClockRepairError,
     LywsdDevice,
     LywsdDeviceError,
@@ -85,6 +86,13 @@ def decode_time(payload: bytes) -> tuple[int, int]:
     raise LywsdDeviceError(f"time payload too short: {payload!r}")
 
 
+def _utc_timestamp(when: datetime) -> float:
+    """Seconds since the epoch for an aware or naive-UTC datetime."""
+    if when.tzinfo is None:
+        return when.replace(tzinfo=timezone.utc).timestamp()
+    return when.astimezone(timezone.utc).timestamp()
+
+
 def encode_units(units: str) -> bytes:
     """Encode display units option to GATT bytes."""
     try:
@@ -152,6 +160,35 @@ class Lywsd02mmc(LywsdDevice):
 
         return decode_climate(holder["payload"])
 
+    async def get_time(
+        self, client, when: datetime, *, monotonic=time.monotonic
+    ) -> ClockReading:
+        """Read the clock and report its error against ``when``.
+
+        One 5-byte read on a connection that is already open, which is what
+        makes drift worth checking on every climate poll: the connection is the
+        expensive part, the read is a single round trip on top of it.
+
+        The value in the response was true at roughly the midpoint of that
+        round trip, not when the request left, so the comparison is made
+        against ``when`` advanced by one estimated one-way trip. Without that
+        correction every reading over a proxy hop looks slow by the link
+        latency, and a threshold near the device's one-second resolution would
+        fire on the link rather than on the clock.
+        """
+        started = monotonic()
+        raw = await client.read_gatt_char(UUID_TIME)
+        one_way = (monotonic() - started) / 2.0
+        epoch, tz_offset = decode_time(raw)
+        base_ts = _utc_timestamp(when)
+        return ClockReading(
+            epoch=epoch,
+            tz_offset_hours=tz_offset,
+            drift_seconds=float(epoch - (base_ts + one_way)),
+            one_way_seconds=one_way,
+            sampled_at=started,
+        )
+
     async def set_time(
         self,
         client,
@@ -160,6 +197,7 @@ class Lywsd02mmc(LywsdDevice):
         *,
         monotonic=time.monotonic,
         sleeper=asyncio.sleep,
+        reading: ClockReading | None = None,
     ) -> SyncResult:
         """Write the wall clock so it lands on a whole second.
 
@@ -177,27 +215,21 @@ class Lywsd02mmc(LywsdDevice):
 
         Latency is measured, not assumed: the preceding read's round trip gives
         the estimate, and the wait is capped by construction at one second.
-        """
-        started = monotonic()
-        before = await client.read_gatt_char(UUID_TIME)
-        read_rtt = monotonic() - started
-        # The value in that response was true at roughly the midpoint of the
-        # round trip, not when the request left.
-        one_way = read_rtt / 2.0
-        before_epoch, _ = decode_time(before)
 
-        if when.tzinfo is None:
-            when_utc = when.replace(tzinfo=timezone.utc)
-        else:
-            when_utc = when.astimezone(timezone.utc)
-        base_ts = when_utc.timestamp()
+        A caller that has just read the clock — the poll cycle, which decides
+        whether to write at all from that read — passes it as ``reading`` and
+        the read is not repeated. It must have been taken with the same
+        ``when``, since both are anchored to the same monotonic timeline.
+        """
+        if reading is None:
+            reading = await self.get_time(client, when, monotonic=monotonic)
+        started = reading.sampled_at
+        one_way = reading.one_way_seconds
+        drift_seconds = reading.drift_seconds
+        base_ts = _utc_timestamp(when)
 
         def _now_ts() -> float:
             return base_ts + (monotonic() - started)
-
-        # Compare like with like: that reading describes the device at the
-        # midpoint of the read, which is base_ts + one_way on our clock.
-        drift_seconds = float(before_epoch - (base_ts + one_way))
 
         # First boundary the write can still reach, then wait for its cue.
         written_epoch = int(math.floor(_now_ts() + one_way)) + 1
@@ -214,7 +246,8 @@ class Lywsd02mmc(LywsdDevice):
         # The device has been ticking since the write landed, so check it
         # against the current time rather than against what was written.
         expected_now = base_ts + (monotonic() - started) - one_way
-        if abs(after_epoch - expected_now) > TIME_VERIFY_TOLERANCE:
+        residual = float(after_epoch - expected_now)
+        if abs(residual) > TIME_VERIFY_TOLERANCE:
             raise LywsdVerifyError(
                 f"time read-back mismatch: expected ~{expected_now:.1f}, "
                 f"read {after_epoch}"
@@ -224,6 +257,7 @@ class Lywsd02mmc(LywsdDevice):
             read_back_epoch=after_epoch,
             drift_seconds=drift_seconds,
             compensation_seconds=float(compensation),
+            residual_seconds=residual,
         )
 
     async def set_time_format(

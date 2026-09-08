@@ -55,6 +55,25 @@ AUTO_SYNC_FULL_WEIGHT_DAYS = 7.0
 # the plain average that long samples have always used.
 AUTO_SYNC_MAX_SAMPLE_WEIGHT = 0.5
 
+# ── Drift-triggered sync (climate polling only) ──────────────────────────────
+# A climate poll already holds a connection, so reading the clock on it costs
+# one round trip while opening a connection costs a poll. That makes it worth
+# reading every poll and writing only when the clock is actually wrong — which
+# also catches what no schedule can: a battery change or a firmware reset that
+# sends the display back to 1970 between two scheduled syncs.
+#
+# Floor between drift-triggered writes. The read is cheap, the write is not,
+# and the epoch's UTC-vs-local meaning is still unverified (docs/protocol.md
+# §3) — firmware that stores local time would read as a constant timezone-sized
+# error and, without this, be "corrected" on every single poll forever.
+DRIFT_SYNC_MIN_INTERVAL_SECONDS = 3600
+# A scheduled sync is skipped when a poll has just verified the clock. Half the
+# tolerance leaves room for the drift accumulated since that reading, so the
+# decision does not hinge on exactly how old it is.
+DRIFT_SYNC_SKIP_MARGIN = 0.5
+# How far past the poll interval a reading still counts as "just taken".
+DRIFT_CHECK_GRACE_SECONDS = 300
+
 # Grace period after startup before a due sync fires, so the Bluetooth stack
 # and any ESPHome proxies have settled.
 STARTUP_SYNC_DELAY_SECONDS = 60

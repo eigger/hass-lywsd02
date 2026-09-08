@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    AUTO_SYNC_DISABLED,
     AUTO_SYNC_FULL_WEIGHT_DAYS,
     AUTO_SYNC_MAX_SAMPLE_WEIGHT,
     AUTO_SYNC_MIN_RATE_SAMPLE_DAYS,
@@ -22,6 +23,9 @@ from .const import (
     DEFAULT_CLIMATE_SENSORS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    DRIFT_SYNC_MIN_INTERVAL_SECONDS,
+    auto_sync_choice,
+    auto_sync_tolerance_seconds,
     scan_interval_seconds,
 )
 from .device import LywsdDevice
@@ -47,6 +51,10 @@ class LywsdData:
     # Seconds the device clock gains/loses per day, averaged over syncs.
     drift_rate_per_day: float | None = None
     next_sync: datetime | None = None
+    # Drift as last *read* on a poll connection, and when that read happened.
+    # Distinct from clock_drift, which is the error the last write corrected.
+    observed_drift: float | None = None
+    clock_checked: datetime | None = None
     # What the scheduler is currently doing, so the next_sync sensor can say
     # why its value is where it is — or that there is deliberately no value.
     auto_sync_mode: str | None = None
@@ -74,6 +82,7 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.hass = hass
         self.identifier = address.replace(":", "")[-8:]
         self._units_warn_logged = False
+        self._drift_floor_warned = False
         self._session_start: float | None = None
         self._unsub_duration: Callable[[], None] | None = None
         self.store = LywsdStore(hass, entry.entry_id)
@@ -157,6 +166,11 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.data.last_sync = stored.get("last_sync")
         self.data.clock_drift = stored.get("clock_drift")
         self.data.drift_rate_per_day = stored.get("drift_rate_per_day")
+        # A clock-only install measures drift once a sync — up to 180 days
+        # apart. Without this the sensor would read "unknown" for months after
+        # every restart.
+        self.data.observed_drift = stored.get("observed_drift")
+        self.data.clock_checked = stored.get("clock_checked")
         if stored.get("battery") is not None:
             self.data.battery = stored["battery"]
         if stored.get("units"):
@@ -171,6 +185,8 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
                 last_sync=self.data.last_sync,
                 clock_drift=self.data.clock_drift,
                 drift_rate_per_day=self.data.drift_rate_per_day,
+                observed_drift=self.data.observed_drift,
+                clock_checked=self.data.clock_checked,
                 battery=self.data.battery,
                 units=self.data.units,
                 time_format=self.data.time_format,
@@ -183,6 +199,7 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         drift_seconds: float,
         when: datetime,
         compensation: float | None = None,
+        residual: float | None = None,
     ) -> None:
         """Record a successful clock write and update the observed drift rate.
 
@@ -216,6 +233,13 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.data.clock_drift = drift_seconds
         if compensation is not None:
             self.data.write_compensation = compensation
+        if residual is not None:
+            # The write's own read-back is a measurement like any other, so it
+            # refreshes the drift sensor. Reporting a flat 0 here instead would
+            # hide the device's whole-second quantisation and make every sync
+            # look perfect.
+            self.data.observed_drift = residual
+            self.data.clock_checked = when
 
     async def async_after_sync(self) -> None:
         """Persist and re-arm the auto-sync timer after any successful sync."""
@@ -243,15 +267,100 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.data.last_failure = dt_util.now()
         self.async_update_listeners()
 
+    async def _check_clock(self, client, device, tolerance: int) -> bool:
+        """Read the clock on the poll's connection; write only if it is wrong.
+
+        The connection is the expensive part of a poll on a CR2032 device, and
+        it is already open here — so the clock is read every cycle and written
+        on the same connection the moment the error passes the tolerance. That
+        is strictly cheaper than the schedule it supplements: a scheduled sync
+        opens a connection of its own to write a clock that is usually still
+        fine, while this one writes only when there is something to correct,
+        and notices a battery change or a reset within one poll instead of
+        within one sync interval.
+
+        Never raises: the poll's job is climate, and a clock that could not be
+        read or written is picked up by the next poll — or, failing that, by
+        the schedule, which stays armed as the safety net.
+
+        Returns whether the clock was written.
+        """
+        now = dt_util.now()
+        try:
+            reading = await device.get_time(client, now)
+        except Exception as err:
+            _LOGGER.debug("LYWSD %s: clock read skipped: %s", self.address, err)
+            return False
+
+        self.data.observed_drift = reading.drift_seconds
+        self.data.clock_checked = now
+        if abs(reading.drift_seconds) <= tolerance:
+            return False
+
+        # A write that does not take would otherwise repeat every poll. Most
+        # likely cause is a firmware whose epoch is not the UTC one this
+        # integration assumes (docs/protocol.md §3): the error would then read
+        # as a constant timezone-sized offset that no write can close.
+        last_sync = self.data.last_sync
+        if (
+            last_sync is not None
+            and (now - last_sync).total_seconds() < DRIFT_SYNC_MIN_INTERVAL_SECONDS
+        ):
+            if not self._drift_floor_warned:
+                self._drift_floor_warned = True
+                _LOGGER.warning(
+                    "LYWSD %s: clock still off by %.1fs right after a sync — "
+                    "not rewriting it every poll. Please report this with your "
+                    "firmware version.",
+                    self.address,
+                    reading.drift_seconds,
+                )
+            return False
+
+        utcoffset = now.utcoffset()
+        offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
+        try:
+            result = await device.set_time(client, now, offset, reading=reading)
+        except Exception as err:
+            _LOGGER.warning(
+                "LYWSD %s: clock was off by %.1fs but the write failed: %s",
+                self.address,
+                reading.drift_seconds,
+                err,
+            )
+            return False
+
+        _LOGGER.debug(
+            "LYWSD %s: clock was off by %.1fs (tolerance %ss) — synced on the "
+            "poll connection",
+            self.address,
+            result.drift_seconds,
+            tolerance,
+        )
+        self.note_sync(
+            result.drift_seconds,
+            dt_util.now(),
+            result.compensation_seconds,
+            result.residual_seconds,
+        )
+        self._drift_floor_warned = False
+        return True
+
     async def _async_update_data(self) -> LywsdData:
         # Late import avoids circular dependency with async_execute.
         from . import async_execute
 
         previous = self.data
+        options = {**self.entry.data, **self.entry.options}
+        check_clock = auto_sync_choice(options) != AUTO_SYNC_DISABLED
+        tolerance = auto_sync_tolerance_seconds(options)
+        synced: list[bool] = []
 
         async def _op(client, device):
             climate = await device.read_climate(client, DEFAULT_CLIMATE_TIMEOUT)
             battery = await device.get_battery(client)
+            if check_clock:
+                synced.append(await self._check_clock(client, device, tolerance))
             units = previous.units
             if units is None:
                 try:
@@ -282,6 +391,12 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             self.data = updated
             raise UpdateFailed(f"LYWSD poll failed for {self.address}: {err}") from err
 
+        if any(synced):
+            # Persist and re-arm outside the BLE session: the schedule is now a
+            # full interval from this write, which is the whole point of doing
+            # it here — the connection the scheduler would have opened is saved.
+            await self.async_after_sync()
+
         return LywsdData(
             temperature=climate.temperature,
             humidity=climate.humidity,
@@ -293,6 +408,8 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             write_compensation=previous.write_compensation,
             drift_rate_per_day=previous.drift_rate_per_day,
             next_sync=previous.next_sync,
+            observed_drift=previous.observed_drift,
+            clock_checked=previous.clock_checked,
             auto_sync_mode=previous.auto_sync_mode,
             sync_interval_days=previous.sync_interval_days,
             failure_count=0,
