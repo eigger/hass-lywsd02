@@ -37,6 +37,9 @@
       "next_sync": {
         "default": "mdi:clock-fast"
       },
+      "clock_drift": {
+        "default": "mdi:clock-edit-outline"
+      },
       "failure_count": {
         "default": "mdi:alert-circle"
       },
