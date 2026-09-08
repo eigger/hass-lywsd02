@@ -37,6 +37,23 @@ class ClimateReading:
 
 
 @dataclass(frozen=True)
+class ClockReading:
+    """One latency-corrected look at the device clock.
+
+    ``drift_seconds`` is the only field a caller normally wants. The other two
+    exist so a write can be issued on the back of this read without paying for
+    a second one: ``sampled_at`` anchors the monotonic timeline the reading was
+    taken on, and ``one_way_seconds`` is half the measured round trip.
+    """
+
+    epoch: int
+    tz_offset_hours: int
+    drift_seconds: float  # device clock - HA clock
+    one_way_seconds: float = 0.0
+    sampled_at: float = 0.0
+
+
+@dataclass(frozen=True)
 class SyncResult:
     """Result of a time sync operation."""
 
@@ -46,6 +63,11 @@ class SyncResult:
     # Seconds added to the sampled time to land on target despite link latency
     # and the device's whole-second storage. Diagnostic only.
     compensation_seconds: float = 0.0
+    # What the verify read-back actually showed the clock to be off by *after*
+    # the write. Small but rarely zero, because the device stores whole
+    # seconds — and measured rather than assumed, which is what lets the drift
+    # sensor report a real value after a sync instead of a hopeful 0.
+    residual_seconds: float = 0.0
 
 
 class LywsdDevice(ABC):
@@ -60,6 +82,10 @@ class LywsdDevice(ABC):
     @abstractmethod
     async def get_battery(self, client) -> int | None:
         """Return battery percent, or None if unavailable."""
+
+    @abstractmethod
+    async def get_time(self, client, when: datetime, **kwargs) -> ClockReading:
+        """Read the device clock and report how far it has drifted from ``when``."""
 
     @abstractmethod
     async def set_time(

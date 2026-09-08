@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .base import (
     ClimateReading,
+    ClockReading,
     LywsdClockRepairError,
     LywsdDevice,
     LywsdDeviceError,
@@ -32,6 +33,7 @@ def device_for(local_name: str | None) -> type[LywsdDevice] | None:
 
 __all__ = [
     "ClimateReading",
+    "ClockReading",
     "LywsdClockRepairError",
     "LywsdDevice",
     "LywsdDeviceError",

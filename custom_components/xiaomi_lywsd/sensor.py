@@ -73,6 +73,14 @@ DIAGNOSTIC_SENSORS: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
+        key="observed_drift",
+        translation_key="clock_drift",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
         key="failure_count",
         translation_key="failure_count",
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -143,6 +151,11 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
         # clock sync.
         if self.entity_description.key == "battery":
             return self._lywsd.data.battery is not None
+        # Same reasoning: the drift sensor is fed by any clock measurement —
+        # a poll's read or a sync's read-back — and stays valid after a failed
+        # climate poll. Before the first one there is nothing to show.
+        if self.entity_description.key == "observed_drift":
+            return self._lywsd.data.observed_drift is not None
         return True
 
     @property
@@ -172,6 +185,11 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
                 # A proxy hop typically costs a second or two.
                 "write_compensation_seconds": data.write_compensation,
             }
+        if self.entity_description.key == "observed_drift":
+            # The value is a measurement, so when it was taken is the one thing
+            # a reader needs to judge it by — a drift of 4 s means something
+            # different an hour after the reading than a month after it.
+            return {"clock_checked": data.clock_checked}
         if self.entity_description.key == "next_sync":
             # An empty state means automatic sync is off, so say so outright
             # rather than leaving "unknown" to be interpreted.

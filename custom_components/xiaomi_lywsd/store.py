@@ -70,6 +70,8 @@ class LywsdStore:
             "last_sync": _parse_dt(raw.get("last_sync")),
             "clock_drift": _parse_float(raw.get("clock_drift")),
             "drift_rate_per_day": _parse_float(raw.get("drift_rate_per_day")),
+            "observed_drift": _parse_float(raw.get("observed_drift")),
+            "clock_checked": _parse_dt(raw.get("clock_checked")),
             # Slow-moving enough to be worth keeping: with a 180-day sync
             # cycle the alternative is "unknown" for months after a restart.
             "battery": _parse_int(raw.get("battery")),
@@ -85,6 +87,8 @@ class LywsdStore:
         last_sync: datetime | None,
         clock_drift: float | None,
         drift_rate_per_day: float | None,
+        observed_drift: float | None,
+        clock_checked: datetime | None,
         battery: int | None,
         units: str | None,
         time_format: str | None,
@@ -95,6 +99,10 @@ class LywsdStore:
                 "last_sync": last_sync.isoformat() if last_sync else None,
                 "clock_drift": clock_drift,
                 "drift_rate_per_day": drift_rate_per_day,
+                "observed_drift": observed_drift,
+                "clock_checked": (
+                    clock_checked.isoformat() if clock_checked else None
+                ),
                 "battery": battery,
                 "units": units,
                 "time_format": time_format,
