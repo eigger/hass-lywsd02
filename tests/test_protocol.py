@@ -72,7 +72,9 @@ async def test_set_time_writes_expected_bytes():
     )
     device = Lywsd02mmc()
     result = await device.set_time(client, when, 9, **_StubClock().hooks)
-    assert result.drift_seconds == pytest.approx(-120.0)
+    # 120 s behind, less the half second that an epoch of N leaves unsaid: the
+    # device is somewhere in [N, N+1), so N alone would call it 120.5 behind.
+    assert result.drift_seconds == pytest.approx(-119.5)
     # The write is aimed at the next whole second, not at the sampled one.
     assert result.written_epoch == epoch + 1
     assert any(w[0] == UUID_TIME and w[2] is True for w in client.writes)

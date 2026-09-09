@@ -148,11 +148,19 @@ async def test_a_genuinely_wrong_read_back_still_fails():
 
 @pytest.mark.asyncio
 async def test_drift_is_measured_against_the_same_instant():
-    """The device value is from mid-round-trip; comparing it with the sampling
-    instant would report the link latency as clock drift."""
+    """A perfect clock must read as zero error, not as an artefact of how it
+    was read.
+
+    Two things would otherwise show up as drift. The device value is from
+    mid-round-trip, so comparing it with the sampling instant would report the
+    link latency. And the answer is a whole second, so taking the epoch flat
+    instead of the middle of the second it stands for would report a steady
+    half second of lateness. Both are corrected, so a device that is genuinely
+    in sync lands on zero.
+    """
     when = dt.datetime(2026, 8, 23, 12, 0, 0, tzinfo=UTC)
     clock = _Clock(step=1.0)
     client = _client(clock, when)  # device is perfectly in sync
 
     result = await Lywsd02mmc().set_time(client, when, 9, monotonic=clock, sleeper=clock.sleep)
-    assert abs(result.drift_seconds) <= 0.5
+    assert abs(result.drift_seconds) <= 0.05

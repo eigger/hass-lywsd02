@@ -51,6 +51,10 @@ CODE_TO_UNITS = {
 }
 
 TIME_VERIFY_TOLERANCE = 2.0
+# The clock answers in whole seconds, so an epoch of N places the device
+# anywhere in [N, N+1) and the middle of that window is the unbiased estimate.
+# Reading N as N exactly would report a perfect clock as half a second slow.
+EPOCH_MIDPOINT = 0.5
 WRITE_RESPONSE = True  # 미검증: community clients use withResponse=True
 DEFAULT_CLIMATE_TIMEOUT = 15.0
 
@@ -169,12 +173,21 @@ class Lywsd02mmc(LywsdDevice):
         makes drift worth checking on every climate poll: the connection is the
         expensive part, the read is a single round trip on top of it.
 
+        Two corrections separate the clock's error from the way it was read.
+
         The value in the response was true at roughly the midpoint of that
         round trip, not when the request left, so the comparison is made
         against ``when`` advanced by one estimated one-way trip. Without that
         correction every reading over a proxy hop looks slow by the link
         latency, and a threshold near the device's one-second resolution would
         fire on the link rather than on the clock.
+
+        And the answer is a whole second: an epoch of N means the device is
+        somewhere in [N, N+1), so the estimate is N + ``EPOCH_MIDPOINT``.
+        Taking N flat would report a perfect clock as half a second slow every
+        time — a bias that survives averaging and, worse, propagates into the
+        drift rate, where half a second over a short interval is enough to
+        stretch the next one noticeably.
         """
         started = monotonic()
         raw = await client.read_gatt_char(UUID_TIME)
@@ -184,7 +197,7 @@ class Lywsd02mmc(LywsdDevice):
         return ClockReading(
             epoch=epoch,
             tz_offset_hours=tz_offset,
-            drift_seconds=float(epoch - (base_ts + one_way)),
+            drift_seconds=float(epoch + EPOCH_MIDPOINT - (base_ts + one_way)),
             one_way_seconds=one_way,
             sampled_at=started,
         )
@@ -246,7 +259,7 @@ class Lywsd02mmc(LywsdDevice):
         # The device has been ticking since the write landed, so check it
         # against the current time rather than against what was written.
         expected_now = base_ts + (monotonic() - started) - one_way
-        residual = float(after_epoch - expected_now)
+        residual = float(after_epoch + EPOCH_MIDPOINT - expected_now)
         if abs(residual) > TIME_VERIFY_TOLERANCE:
             raise LywsdVerifyError(
                 f"time read-back mismatch: expected ~{expected_now:.1f}, "
