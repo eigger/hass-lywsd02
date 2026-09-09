@@ -166,6 +166,21 @@ spawning more entities:
 
 The value after a sync is the one the write's own read-back measured, not an assumed zero — the device stores whole seconds, so landing exactly on target is luck rather than the norm. Without climate polling the sensor updates once per sync.
 
+**Expect the reading to scatter by about a second.** The clock answers in whole
+seconds, so an epoch of N only says the device is somewhere in [N, N+1); the
+middle of that window is reported, which is unbiased but still lands anywhere
+in a one-second band. Where in the band depends on how the poll's timing fell
+against the device's own tick, and connection setup varies by a few hundred
+milliseconds every time — so it is redrawn on each poll rather than sweeping
+slowly. Link round-trip asymmetry adds a little more.
+
+That noise floor is around a second, while an accurate unit drifts a fraction
+of a second per day. So a day of history looks like scatter, not a ramp, and
+the trend only clears the noise after a week or two. To see it sooner, average
+it: a **Statistics** helper over the drift sensor with a 24-hour window and
+`mean` cuts the scatter by about five times, because each reading's error is
+an independent draw rather than a slow wander.
+
 **Next sync** — when the next automatic sync is due. `unknown` when automatic sync is off; the attributes say so outright.
 
 | Attribute | Meaning |
