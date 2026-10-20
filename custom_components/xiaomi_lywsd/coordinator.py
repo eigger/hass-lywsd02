@@ -89,9 +89,7 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         # Set by _async_setup_auto_sync so a manual sync re-arms the timer.
         self.reschedule_auto_sync: Callable[[], None] | None = None
         options = {**entry.data, **entry.options}
-        climate_on = bool(
-            options.get(CONF_CLIMATE_SENSORS, DEFAULT_CLIMATE_SENSORS)
-        )
+        climate_on = bool(options.get(CONF_CLIMATE_SENSORS, DEFAULT_CLIMATE_SENSORS))
         # Clock-only mode must not open a BLE session every scan_interval —
         # that was burning battery while no climate entity consumed the values.
         if climate_on:

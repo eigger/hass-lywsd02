@@ -49,9 +49,7 @@ class _LywsdSelectBase(CoordinatorEntity, RestoreEntity, SelectEntity):
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(
-        self, hass: HomeAssistant, entry: LywsdConfigEntry, key: str
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry, key: str) -> None:
         self.hass = hass
         self._entry = entry
         coordinator = entry.runtime_data
@@ -153,9 +151,7 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
         coordinator = self._entry.runtime_data
         previous = coordinator.data.time_format
         utcoffset = dt_util.now().utcoffset()
-        tz_offset_hours = (
-            int(utcoffset.total_seconds() // 3600) if utcoffset else 0
-        )
+        tz_offset_hours = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
 
         async def _op(client, device):
             # Sampled inside the op: taking it before async_execute would age
@@ -164,9 +160,7 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
             # set_time_format rewrites the clock on the same connection, so a
             # firmware that mistakes the mode command for a time write cannot
             # leave the display stuck in 1970.
-            result = await device.set_time_format(
-                client, option, now, tz_offset_hours
-            )
+            result = await device.set_time_format(client, option, now, tz_offset_hours)
             coordinator.data.time_format = option
             coordinator.note_sync(
                 result.drift_seconds,

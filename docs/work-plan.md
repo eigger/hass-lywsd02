@@ -203,8 +203,9 @@ HA가 이를 "Unable to fetch data"로 삼켜 **모든 엔티티가 조용히 �
 # coordinator.py
 class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
     def __init__(self, hass, entry, device, address, scan_interval):
-        super().__init__(hass, _LOGGER, name=DOMAIN,
-                         update_interval=timedelta(seconds=scan_interval))
+        super().__init__(
+            hass, _LOGGER, name=DOMAIN, update_interval=timedelta(seconds=scan_interval)
+        )
 
     async def _async_update_data(self) -> LywsdData:
         # async_execute 로 한 번 연결 → 한 사이클에서 전부 수집
@@ -217,7 +218,7 @@ class LywsdData:
     temperature: float | None = None
     humidity: int | None = None
     battery: int | None = None
-    units: str | None = None            # "celsius" | "fahrenheit"
+    units: str | None = None  # "celsius" | "fahrenheit"
     last_sync: datetime | None = None
     last_drift_seconds: float | None = None
     failure_count: int = 0
@@ -470,28 +471,37 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 1. `device/base.py`:
    ```python
    class LywsdDeviceError(Exception): ...
+
+
    class LywsdVerifyError(LywsdDeviceError):
        """write는 성공했으나 read-back이 기대값과 다르다."""
 
+
    @dataclass
    class ClimateReading:
-       temperature: float      # °C
-       humidity: int           # %
+       temperature: float  # °C
+       humidity: int  # %
+
 
    @dataclass
    class SyncResult:
        written_epoch: int
        read_back_epoch: int
-       drift_seconds: float    # write 직전 기기 시각 - HA 시각
+       drift_seconds: float  # write 직전 기기 시각 - HA 시각
+
 
    class LywsdDevice(ABC):
        MODEL: ClassVar[str]
+
        async def read_climate(self, client, timeout: float) -> ClimateReading: ...
        async def get_battery(self, client) -> int | None: ...
-       async def set_time(self, client, when: datetime, tz_offset_hours: int) -> SyncResult: ...
-       async def get_units(self, client) -> str: ...        # "celsius" | "fahrenheit"
+       async def set_time(
+           self, client, when: datetime, tz_offset_hours: int
+       ) -> SyncResult: ...
+       async def get_units(self, client) -> str: ...  # "celsius" | "fahrenheit"
        async def set_units(self, client, units: str) -> None: ...
-       async def read_history(self, client): raise NotImplementedError
+       async def read_history(self, client):
+           raise NotImplementedError
    ```
    메서드는 **이미 연결된 `BleakClient`를 인자로 받는다.** 연결 수립·해제는 `async_execute`의
    책임이다. 그래야 한 연결로 여러 동작을 묶을 수 있다.
@@ -509,6 +519,7 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 3. `device/__init__.py` — dispatch 테이블:
    ```python
    _MODELS: dict[str, type[LywsdDevice]] = {"LYWSD02MMC": Lywsd02mmc}
+
 
    def device_for(local_name: str | None) -> type[LywsdDevice] | None: ...
    ```
@@ -602,7 +613,9 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 
 2. **`async_execute` 헬퍼:**
    ```python
-   async def async_execute(hass, entry, op: Callable[[BleakClient, LywsdDevice], Awaitable[T]]) -> T:
+   async def async_execute(
+       hass, entry, op: Callable[[BleakClient, LywsdDevice], Awaitable[T]]
+   ) -> T:
        """락 획득 → stale 정리 → 연결 → op → 반드시 disconnect."""
    ```
    - a. `async with hass.data[DOMAIN][LOCK]:`
@@ -663,8 +676,9 @@ T11/T12를 앞에 두는 이유: 테스트와 린트가 먼저 돌아야 T2 이�
 - `LywsdSyncTimeButton`, `translation_key="sync_time"`, 아이콘 `mdi:clock-check-outline`.
 - `async_press`:
   ```python
-  result = await async_execute(self.hass, self._entry,
-      lambda c, d: d.set_time(c, dt_util.now(), tz_offset_hours))
+  result = await async_execute(
+      self.hass, self._entry, lambda c, d: d.set_time(c, dt_util.now(), tz_offset_hours)
+  )
   ```
   `tz_offset_hours`는 **HA 설정 타임존에서 계산**한다 — 하드코딩 금지:
   `int(dt_util.now().utcoffset().total_seconds() // 3600)`.

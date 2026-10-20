@@ -1,8 +1,6 @@
 """Deterministic monotonic + sleep for clock-write tests.
 
-Lives outside conftest on purpose: importing conftest as a module re-executes
-it, which reinstalls the Home Assistant stubs in sys.modules and quietly
-replaces exception classes the already-imported code is matching against.
+Shared by protocol and write-latency tests without modifying HA fixtures.
 """
 
 from __future__ import annotations

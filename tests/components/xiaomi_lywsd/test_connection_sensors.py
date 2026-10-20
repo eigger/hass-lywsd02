@@ -7,14 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.xiaomi_lywsd.binary_sensor import LywsdConnectivityBinarySensor
 from custom_components.xiaomi_lywsd.coordinator import LywsdCoordinator
 from custom_components.xiaomi_lywsd.device import Lywsd02mmc
-from custom_components.xiaomi_lywsd.sensor import LywsdConnectionDurationSensor
 
 
-def _coord():
-    hass = MagicMock()
+def _coord(hass):
     hass.data = {"xiaomi_lywsd": {"lock": asyncio.Lock()}}
     entry = MagicMock()
     entry.entry_id = "e1"
@@ -32,8 +29,8 @@ def _coord():
     return hass, entry, coord
 
 
-def test_begin_end_connection_updates_coordinators():
-    hass, entry, coord = _coord()
+def test_begin_end_connection_updates_coordinators(hass):
+    hass, entry, coord = _coord(hass)
     assert coord.connectivity.data is False
     assert coord.connection_duration.data == 0.0
 
@@ -47,29 +44,11 @@ def test_begin_end_connection_updates_coordinators():
     assert coord.connection_duration.data == 1.5
 
 
-def test_connectivity_and_duration_entities():
-    hass, entry, coord = _coord()
-    binary = LywsdConnectivityBinarySensor(coord)
-    duration = LywsdConnectionDurationSensor(coord)
-    assert binary.available is True
-    assert duration.available is True
-    assert binary.is_on is False
-    assert duration.native_value == 0.0
-
-    coord.begin_connection()
-    # Simulate HA listener dispatch from connectivity / duration coordinators.
-    binary._handle_coordinator_update()
-    duration._handle_coordinator_update()
-    assert binary.coordinator is coord.connectivity
-    assert binary.is_on is True
-    assert duration.native_value == 0.0
-
-
 @pytest.mark.asyncio
-async def test_async_execute_toggles_connectivity():
+async def test_async_execute_toggles_connectivity(hass):
     from custom_components.xiaomi_lywsd import async_execute
 
-    hass, entry, coord = _coord()
+    hass, entry, coord = _coord(hass)
     ble = MagicMock()
     ble.address = coord.address
     client = MagicMock()

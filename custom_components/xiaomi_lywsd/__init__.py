@@ -199,14 +199,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
     # now, so leaving this until after would publish "unknown / off" on every
     # restart and correct it a moment later — enough to fire an automation
     # watching for sync being switched off.
-    _async_setup_auto_sync(hass, entry)
+    cancel_auto_sync = _async_setup_auto_sync(hass, entry)
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except (Exception, asyncio.CancelledError):
+        # HA 2025.1 does not run unload callbacks for an unexpected setup error.
+        if cancel_auto_sync is not None:
+            cancel_auto_sync()
+        raise
 
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     _async_register_services(hass)
     _async_maybe_create_proxy_issues(hass, entry, address)
 
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+    """Reload changed options on every supported Home Assistant version."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:
@@ -293,22 +305,20 @@ async def async_execute(
                     continue
                 if not wrap_errors:
                     raise
-                raise HomeAssistantError(
-                    f"BLE 작업 실패 ({address}): {err}"
-                ) from err
+                raise HomeAssistantError(f"BLE 작업 실패 ({address}): {err}") from err
             finally:
                 if client is not None:
                     try:
                         if client.is_connected:
                             await client.disconnect()
                     except Exception as disc_err:
-                        _LOGGER.warning(
-                            "%s disconnect warning: %s", address, disc_err
-                        )
+                        _LOGGER.warning("%s disconnect warning: %s", address, disc_err)
                 if session_open:
                     coordinator.end_connection()
 
-    raise RuntimeError("async_execute exhausted retries without result")  # pragma: no cover
+    raise RuntimeError(
+        "async_execute exhausted retries without result"
+    )  # pragma: no cover
 
 
 def _async_register_services(hass: HomeAssistant) -> None:
@@ -374,15 +384,11 @@ async def _service_sync_time(
     except Exception as err:
         coordinator.record_failure()
         if isinstance(err, LywsdVerifyError):
-            raise HomeAssistantError(
-                "기기가 시간 쓰기를 확인하지 못했습니다"
-            ) from err
+            raise HomeAssistantError("기기가 시간 쓰기를 확인하지 못했습니다") from err
         raise
 
 
-async def _service_read_state(
-    hass: HomeAssistant, entry: LywsdConfigEntry
-) -> None:
+async def _service_read_state(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
     coordinator = entry.runtime_data
 
     async def _op(client, device):
@@ -429,9 +435,7 @@ async def collect_gatt_dump(client) -> dict:
     return {"services": services_out}
 
 
-async def _service_dump_gatt(
-    hass: HomeAssistant, entry: LywsdConfigEntry
-) -> dict:
+async def _service_dump_gatt(hass: HomeAssistant, entry: LywsdConfigEntry) -> dict:
     async def _op(client, device):
         return await collect_gatt_dump(client)
 
@@ -652,7 +656,9 @@ async def _run_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> bool:
     return False
 
 
-def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
+def _async_setup_auto_sync(
+    hass: HomeAssistant, entry: LywsdConfigEntry
+) -> Callable[[], None] | None:
     """Arm a restart-safe automatic sync.
 
     ``async_track_time_interval`` restarts its countdown on every Home Assistant
@@ -724,9 +730,7 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
             # Nothing was written, so last_sync did not move here either. The
             # clock was verified rather than corrected, which is just as good a
             # reason to start the full interval over from now.
-            _schedule(
-                dt_util.now() + _auto_sync_interval(coordinator, options)
-            )
+            _schedule(dt_util.now() + _auto_sync_interval(coordinator, options))
         else:
             _schedule(_due_at())
 
@@ -741,7 +745,7 @@ def _async_setup_auto_sync(hass: HomeAssistant, entry: LywsdConfigEntry) -> None
 
     entry.async_on_unload(_teardown)
     _schedule(_due_at())
-
+    return _teardown
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:

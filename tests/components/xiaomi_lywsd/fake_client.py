@@ -20,9 +20,7 @@ class FakeBleakClient:
     ) -> None:
         self._store = {k.lower(): bytes(v) for k, v in initial.items()}
         self.reject = {u.lower() for u in (reject or set())}
-        self._notify_payloads = {
-            k.lower(): bytes(v) for k, v in (notify or {}).items()
-        }
+        self._notify_payloads = {k.lower(): bytes(v) for k, v in (notify or {}).items()}
         self.notify_delay = notify_delay
         self.notify_timeout = notify_timeout
         self.writes: list[tuple[str, bytes, bool]] = []

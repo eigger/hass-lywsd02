@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 
 import pytest
 
-from custom_components.xiaomi_lywsd.device.base import LywsdDeviceError, LywsdVerifyError
+from custom_components.xiaomi_lywsd.device.base import (
+    LywsdDeviceError,
+    LywsdVerifyError,
+)
 from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
     UUID_DATA,
     UUID_TIME,
@@ -20,10 +23,10 @@ from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
     encode_units,
 )
 from custom_components.xiaomi_lywsd.device import device_for
-from tests.fake_client import FakeBleakClient
+from tests.components.xiaomi_lywsd.fake_client import FakeBleakClient
 
 
-from tests.stub_clock import StubClock as _StubClock
+from tests.components.xiaomi_lywsd.stub_clock import StubClock as _StubClock
 
 
 @pytest.mark.parametrize(

@@ -1,10 +1,20 @@
+<!-- hass-standards:header:start -->
 # hass-lywsd02
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?logo=home-assistant)](https://hacs.xyz/)
-[![GitHub Release](https://img.shields.io/github/release/eigger/hass-lywsd02.svg)](https://github.com/eigger/hass-lywsd02/releases)
-[![License](https://img.shields.io/github/license/eigger/hass-lywsd02)](https://github.com/eigger/hass-lywsd02/blob/main/LICENSE)
-![integration usage](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=%24.xiaomi_lywsd.total)
 
 Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration
+
+**English** | [한국어](README.ko.md)
+
+<!-- hass-standards:badges:start -->
+[![Release](https://img.shields.io/github/v/release/eigger/hass-lywsd02?style=flat)](https://github.com/eigger/hass-lywsd02/releases)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5?style=flat)](#installation)
+[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202025.1.0-41BDF5?style=flat)](hacs.json)
+[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-lywsd02/tests.yml?branch=main&style=flat&label=Tests)](https://github.com/eigger/hass-lywsd02/actions/workflows/tests.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-lywsd02/validate.yml?branch=main&style=flat&label=Validate)](https://github.com/eigger/hass-lywsd02/actions/workflows/validate.yml)
+[![License](https://img.shields.io/github/license/eigger/hass-lywsd02?style=flat)](LICENSE)
+[![HACS Downloads](https://img.shields.io/badge/dynamic/json?style=flat&color=41BDF5&label=HACS+Downloads&query=%24%5B%3F%28%40.full_name%3D%3D%22eigger%2Fhass-lywsd02%22%29%5D.downloads&url=https%3A%2F%2Fdata-v2.hacs.xyz%2Fintegration%2Fdata.json)](https://www.hacs.xyz/)
+<!-- hass-standards:badges:end -->
+<!-- hass-standards:header:end -->
 
 > [!IMPORTANT]
 > **Beta.** Protocol notes live in [`docs/protocol.md`](docs/protocol.md); some
@@ -33,13 +43,6 @@ The **Display units** and **Clock mode** selects change the E-Ink screen only.
 Sensor values always arrive in °C; Home Assistant converts to the user's
 preferred unit.
 
-## Feedback & Support
-
-- Found a bug? [Open an issue](https://github.com/eigger/hass-lywsd02/issues)
-- Questions or ideas? [Join the discussion](https://github.com/eigger/hass-lywsd02/discussions)
-
----
-
 ## Supported Models
 
 | Model | Firmware | Status |
@@ -50,7 +53,11 @@ preferred unit.
 
 ## Installation
 
-1. Install with HACS (custom repository required), or copy this repo into `custom_components/xiaomi_lywsd`.
+<!-- hass-standards:installation:start -->
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-lywsd02)
+<!-- hass-standards:installation:end -->
+
+1. Install **Xiaomi LYWSD** from the HACS default integration catalog, or copy `custom_components/xiaomi_lywsd` into your Home Assistant `custom_components` directory.
 2. Restart Home Assistant.
 3. Go to **Settings** → **Integrations** and add **Xiaomi LYWSD**, or accept the Bluetooth discovery prompt.
 4. If the device isn't discovered, add it manually by MAC address.
@@ -61,6 +68,10 @@ Use a **Bluetooth proxy** instead of a built-in adapter — polling and writes n
 
 > [!TIP]
 > Hardware recommendations: [Great ESP32 Board for an ESPHome Bluetooth Proxy](https://community.home-assistant.io/t/great-esp32-board-for-an-esphome-bluetooth-proxy/916767/31)
+
+For proxy flashing, Home Assistant registration and common troubleshooting, follow the [Bluetooth proxy setup guide](https://github.com/eigger/blesession/blob/main/docs/bluetooth.md).
+
+LYWSD02-class devices need a working coin cell and an available connectable scanner. Close other applications that hold a GATT connection before setup or polling. This integration does not request a bindkey or implement pairing/bonding. LYWSD02MMC stock firmware is confirmed; the original LYWSD02 remains unconfirmed. No additional hardware/proxy validation is claimed here.
 
 **`bluetooth_proxy` must have `active: true`.**
 
@@ -271,10 +282,12 @@ written against the 0.2.0 attribute need updating.
 
 ## Development
 
+The current test environment uses Python 3.14 / Home Assistant 2026.10.2. Minimum support remains Home Assistant 2025.1.0, tested separately with Python 3.13 and `requirements-test-minimum.txt`.
+
 ```bash
-pip install -r requirements-test.txt
+pip install -r requirements-test.txt -r requirements_lint.txt
 python -m ruff check custom_components/ tests/ tools/
-python -m pytest tests/ -v
+python -m pytest tests/components/xiaomi_lywsd/ -v
 ```
 
 Standalone protocol probes (Mac / adapter with direct BLE access only — see
@@ -295,3 +308,19 @@ python tools/probe_units.py AA:BB:CC:DD:EE:FF
 - [h4/lywsd02](https://github.com/h4/lywsd02) — GATT UUID / payload reference implementation
 - [ashald/home-assistant-lywsd02](https://github.com/ashald/home-assistant-lywsd02) — 12h/24h clock-mode payload reference
 - [pvvx/ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer) — custom firmware for LYWSD03MMC
+
+<!-- hass-standards:support:start -->
+## Support
+
+- [Issues](https://github.com/eigger/hass-lywsd02/issues): Report bugs or request features.
+- [Discussions](https://github.com/eigger/hass-lywsd02/discussions): Ask questions and share your experience.
+<!-- hass-standards:support:end -->
+
+<!-- hass-standards:related-projects:start -->
+<!-- hass-standards:related-projects:end -->
+
+<!-- hass-standards:license:start -->
+## License
+
+Released under the [MIT License](LICENSE).
+<!-- hass-standards:license:end -->

@@ -6,7 +6,7 @@ import json
 import os
 
 COMPONENT_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "custom_components", "xiaomi_lywsd"
+    os.path.dirname(__file__), "..", "..", "..", "custom_components", "xiaomi_lywsd"
 )
 STRINGS_PATH = os.path.join(COMPONENT_DIR, "strings.json")
 EN_PATH = os.path.join(COMPONENT_DIR, "translations", "en.json")

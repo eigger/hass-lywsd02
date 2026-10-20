@@ -39,9 +39,7 @@ def test_auto_sync_disabled_registers_nothing():
     hass = MagicMock()
     entry = _auto_sync_entry({CONF_AUTO_SYNC: "0"})
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track:
+    with patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track:
         _async_setup_auto_sync(hass, entry)
         track.assert_not_called()
         entry.async_on_unload.assert_not_called()
@@ -52,15 +50,12 @@ def test_auto_sync_schedules_from_persisted_last_sync():
     """The interval must survive a restart, not restart its countdown."""
     hass = MagicMock()
     entry = _auto_sync_entry({CONF_AUTO_SYNC: "30"})
-    entry.runtime_data.data.last_sync = dt.datetime(
-        2026, 1, 1, tzinfo=dt.timezone.utc
-    )
+    entry.runtime_data.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
     now = dt.datetime(2026, 1, 20, tzinfo=dt.timezone.utc)
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
@@ -74,15 +69,12 @@ def test_auto_sync_schedules_from_persisted_last_sync():
 def test_auto_sync_overdue_fires_shortly_after_startup():
     hass = MagicMock()
     entry = _auto_sync_entry({CONF_AUTO_SYNC: "30"})
-    entry.runtime_data.data.last_sync = dt.datetime(
-        2025, 1, 1, tzinfo=dt.timezone.utc
-    )
+    entry.runtime_data.data.last_sync = dt.datetime(2025, 1, 1, tzinfo=dt.timezone.utc)
     now = dt.datetime(2026, 1, 20, tzinfo=dt.timezone.utc)
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
@@ -95,10 +87,9 @@ def test_auto_sync_never_synced_fires_shortly_after_startup():
     entry = _auto_sync_entry({CONF_AUTO_SYNC: "180"})
     now = dt.datetime(2026, 1, 20, tzinfo=dt.timezone.utc)
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
@@ -109,26 +100,19 @@ def test_auto_sync_never_synced_fires_shortly_after_startup():
 
 def test_auto_sync_adaptive_uses_observed_drift():
     hass = MagicMock()
-    entry = _auto_sync_entry(
-        {CONF_AUTO_SYNC: "auto", CONF_AUTO_SYNC_TOLERANCE: 60}
-    )
-    entry.runtime_data.data.last_sync = dt.datetime(
-        2026, 1, 1, tzinfo=dt.timezone.utc
-    )
+    entry = _auto_sync_entry({CONF_AUTO_SYNC: "auto", CONF_AUTO_SYNC_TOLERANCE: 60})
+    entry.runtime_data.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
     # 6 s/day of drift against a 60 s budget -> 10 days.
     entry.runtime_data.data.drift_rate_per_day = 6.0
     now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
-    assert track.call_args.args[2] == dt.datetime(
-        2026, 1, 11, tzinfo=dt.timezone.utc
-    )
+    assert track.call_args.args[2] == dt.datetime(2026, 1, 11, tzinfo=dt.timezone.utc)
 
 
 def test_proxy_issue_no_scanner():
@@ -209,12 +193,10 @@ async def test_auto_sync_backs_off_after_failures():
     async def failing_sync(_hass, _entry):
         coordinator.data.consecutive_auto_failures += 1
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
-    ), patch(
-        "custom_components.xiaomi_lywsd._run_auto_sync", new=failing_sync
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
+        patch("custom_components.xiaomi_lywsd._run_auto_sync", new=failing_sync),
     ):
         _async_setup_auto_sync(hass, entry)
         fire = track.call_args.args[1]
@@ -224,9 +206,7 @@ async def test_auto_sync_backs_off_after_failures():
         second_retry = track.call_args.args[2]
 
     assert first_retry == now + timedelta(seconds=AUTO_SYNC_RETRY_BASE_SECONDS)
-    assert second_retry == now + timedelta(
-        seconds=AUTO_SYNC_RETRY_BASE_SECONDS * 2
-    )
+    assert second_retry == now + timedelta(seconds=AUTO_SYNC_RETRY_BASE_SECONDS * 2)
 
 
 def test_next_sync_is_published_to_listeners():
@@ -237,14 +217,13 @@ def test_next_sync_is_published_to_listeners():
     coordinator.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
     now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
 
-    with patch("custom_components.xiaomi_lywsd.async_track_point_in_time"), patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time"),
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
-    assert coordinator.data.next_sync == dt.datetime(
-        2026, 1, 8, tzinfo=dt.timezone.utc
-    )
+    assert coordinator.data.next_sync == dt.datetime(2026, 1, 8, tzinfo=dt.timezone.utc)
     coordinator.async_update_listeners.assert_called()
 
 
@@ -278,8 +257,9 @@ def test_next_sync_sensor_reports_fixed_interval():
     coordinator.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
     now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
 
-    with patch("custom_components.xiaomi_lywsd.async_track_point_in_time"), patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time"),
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
@@ -292,16 +272,15 @@ def test_next_sync_sensor_reports_fixed_interval():
 
 def test_next_sync_sensor_reports_adaptive_interval_and_rate():
     hass = MagicMock()
-    entry = _auto_sync_entry(
-        {CONF_AUTO_SYNC: "auto", CONF_AUTO_SYNC_TOLERANCE: 60}
-    )
+    entry = _auto_sync_entry({CONF_AUTO_SYNC: "auto", CONF_AUTO_SYNC_TOLERANCE: 60})
     coordinator = entry.runtime_data
     coordinator.data.last_sync = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
     coordinator.data.drift_rate_per_day = 3.0  # 60 / 3 -> 20 days
     now = dt.datetime(2026, 1, 2, tzinfo=dt.timezone.utc)
 
-    with patch("custom_components.xiaomi_lywsd.async_track_point_in_time"), patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time"),
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
     ):
         _async_setup_auto_sync(hass, entry)
 
@@ -326,12 +305,10 @@ async def test_backoff_retry_does_not_shrink_the_reported_interval():
     async def failing_sync(_hass, _entry):
         coordinator.data.consecutive_auto_failures += 1
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
-    ), patch(
-        "custom_components.xiaomi_lywsd._run_auto_sync", new=failing_sync
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
+        patch("custom_components.xiaomi_lywsd._run_auto_sync", new=failing_sync),
     ):
         _async_setup_auto_sync(hass, entry)
         await track.call_args.args[1](now)
@@ -339,9 +316,7 @@ async def test_backoff_retry_does_not_shrink_the_reported_interval():
     sensor = _next_sync_sensor(coordinator)
     assert sensor.extra_state_attributes["interval_days"] == 30.0
     # …while next_sync itself is the near-term retry.
-    assert sensor.native_value == now + timedelta(
-        seconds=AUTO_SYNC_RETRY_BASE_SECONDS
-    )
+    assert sensor.native_value == now + timedelta(seconds=AUTO_SYNC_RETRY_BASE_SECONDS)
 
 
 @pytest.mark.asyncio
@@ -372,10 +347,9 @@ async def test_next_sync_always_equals_the_time_actually_scheduled():
         coordinator.data.last_sync = last_sync
         coordinator.data.drift_rate_per_day = 3.0
 
-        with patch(
-            "custom_components.xiaomi_lywsd.async_track_point_in_time"
-        ) as track, patch(
-            "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
+        with (
+            patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+            patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
         ):
             _async_setup_auto_sync(MagicMock(), entry)
 
@@ -391,11 +365,11 @@ async def test_next_sync_always_equals_the_time_actually_scheduled():
     async def failing_sync(_hass, _entry):
         coordinator.data.consecutive_auto_failures += 1
 
-    with patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ) as track, patch(
-        "custom_components.xiaomi_lywsd.dt_util.now", return_value=now
-    ), patch("custom_components.xiaomi_lywsd._run_auto_sync", new=failing_sync):
+    with (
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time") as track,
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
+        patch("custom_components.xiaomi_lywsd._run_auto_sync", new=failing_sync),
+    ):
         _async_setup_auto_sync(MagicMock(), entry)
         await track.call_args.args[1](now)
 
