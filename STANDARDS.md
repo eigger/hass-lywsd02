@@ -9,7 +9,7 @@
 - 담당: 조율 root(lywsd02-adoption), 구현 implementation/tests/runtime 및 docs/README/CI, 독립 리뷰 review
 - 중앙 현황 갱신일: 2026-10-20, 중앙 로컬 checkout의 해당 행만 수정; 원격 미반영
 - 실제 기본 브랜치: `main`
-- 검토 대상: `4adac9e3903efe58d8746bd5551ba7e36b1aadd8` + 작업 tree (commit/push/PR 미실행)
+- 검토 대상: 최초 로컬 검증 baseline `4adac9e3903efe58d8746bd5551ba7e36b1aadd8`; 구현 `1dcdbf75f5857066b7488146d1c2a6dcd76b9e48` ([PR #10](https://github.com/eigger/hass-lywsd02/pull/10))
 - 테스트 경로: `tests/components/xiaomi_lywsd/`
 - 변경 전·후 지원 최소 HA: `2025.1.0` (`hacs.json`); 지원 최소 상향 없음
 - CI 이벤트 변경 승인: 사용자 2026-10-20 본 채팅에서 “중앙 템플릿대로 main / 주 1회로 변경 승인”. 기존 main/master·daily에서 main·월요일 03:23 UTC(한국 12:23)로 변경. 승인된 템플릿 적용이므로 CI-02 예외 없음
@@ -31,4 +31,4 @@
 
 ## 최종 검증과 남은 범위
 
-독립 current/minimum 실제 HA 테스트 각각146 passed, pip check·Ruff0.17.1·actionlint1.7.12·중앙검사·최종 Hassfest 통과. setup forwarding 실패와 취소 시 auto-sync timer 정리도 양환경 검증했습니다. 기존 manual 연결확인·BLE proxy/service-change·오류 번역키·MAC 로그 마스킹/중복warning 억제, 게시 후 HACS/원격CI·중앙원격 반영은 체크리스트 TODO입니다. 공용화와 Default 반영 완료를 전체 표준 채택 완료로 표현하지 않습니다.
+독립 current/minimum 실제 HA 테스트 각각146 passed, pip check·Ruff0.17.1·actionlint1.7.12·중앙검사·최종 Hassfest 통과. setup forwarding 실패와 취소 시 auto-sync timer 정리도 양환경 검증했습니다. 기존 manual 연결확인·BLE proxy/service-change·오류 번역키·MAC 로그 마스킹/중복warning 억제, PR #10의 [Tests](https://github.com/eigger/hass-lywsd02/actions/runs/39426665033)·[Validate](https://github.com/eigger/hass-lywsd02/actions/runs/39426664954)가 구현 커밋에서 모두 통과했습니다. 중앙원격 반영은 아직 미실행입니다. 공용화와 Default 반영 완료를 전체 표준 채택 완료로 표현하지 않습니다.

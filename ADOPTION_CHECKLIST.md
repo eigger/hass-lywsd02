@@ -8,7 +8,7 @@
 |---|---|
 | 통합 리포 / 실제 기본 브랜치 | eigger/hass-lywsd02 / main |
 | domain / 구현 경로 | xiaomi_lywsd / custom_components/xiaomi_lywsd/ |
-| 검토 대상 통합 커밋 / 채택 PR | 4adac9e3903efe58d8746bd5551ba7e36b1aadd8 + 작업 tree; PR 미생성 |
+| 검토 대상 통합 커밋 / 채택 PR | 구현1dcdbf75f5857066b7488146d1c2a6dcd76b9e48 / [PR #10](https://github.com/eigger/hass-lywsd02/pull/10) |
 | 검토한 표준 전체 커밋 SHA | 648dad941a118c80325f44c7a13cb5b5b9c1c788 |
 | 검토일 / 조율 담당 | 2026-10-20 (Asia/Seoul) / root(lywsd02-adoption) |
 | 구현 서브 에이전트 / 독립 리뷰·검증 서브 에이전트 | implementation·docs / review |
@@ -28,7 +28,7 @@
 | 규칙 ID | 확인 항목 | 상태 | 근거 / 남은 작업 |
 |---|---|---|---|
 | GOV-01, GOV-02 | `STANDARDS.md`에 표준 SHA·profile·실제 기본 브랜치·예외 기록, workflow/action은 검토 SHA로 고정 | PASS | STANDARDS.md에 검토 원격 main full SHA·profile·작업 tree 기록; caller는 동일 SHA로 고정 |
-| GOV-03 | 새 표준 채택 변경의 영향·이관 방법과 명시적 채택 PR 확인. 규칙 자체를 변경하면 공통 CHANGELOG 기록 | TODO | 로컬 최초 채택 구현 중. commit/push/채택 PR 미실행 |
+| GOV-03 | 새 표준 채택 변경의 영향·이관 방법과 명시적 채택 PR 확인. 규칙 자체를 변경하면 공통 CHANGELOG 기록 | PASS | 명시적 채택 [PR #10](https://github.com/eigger/hass-lywsd02/pull/10); 변경 영향·지원범위 및 사용자 승인 기록 확인 |
 | GOV-04 | 중앙 표에 작업 시작·단계 변경·종료 상태, 담당·적용 내용·검증/리뷰 근거·남은 작업 갱신, 타 리포 기록 보존 | TODO | 중앙 로컬 checkout 해당 행 시작·구현·최종 검증 상태 갱신 완료. 다른 세션 행 보존; 원격 반영은 아직 미실행 |
 | GOV-05 | 구현과 독립 리뷰·검증을 별도 서브 에이전트에게 위임, 지적 수정·재검증 및 결과 취합 | PASS | 구현 implementation/docs 및 독립 review. 최소 options import·setup 실패/취소 누수·실제 service/options 회귀·문서포맷 지적 수정 후 전체 양HA146 PASS 독립 재실행 |
 | HA-01, HA-13 | `custom_components/<domain>/`와 domain 일치, 필요한 모듈·공개 API·생명주기는 Core 대응 구조 | PASS | custom_components/xiaomi_lywsd에 config flow/coordinator/플랫폼/typed entry·device 프로토콜 경계 유지. 실제 HA entry 로딩 검증 |
@@ -69,11 +69,11 @@
 | 규칙 ID | 확인 항목 | 상태 | 근거 / 남은 작업 |
 |---|---|---|---|
 | HACS-01, HACS-02 | 루트 README/LICENSE/hacs.json, 검증한 최소 HA, 실제 배포 구조와 필요한 옵션 일치 | PASS | 루트 README/LICENSE/hacs.json 유지, custom_components/xiaomi_lywsd 배포; 최소2025.1.0 보존 |
-| HACS-03, HACS-05 | Default 여부는 목록 근거로 확인, [로컬 brand/icon.png 또는 원격 brands 근거](https://github.com/eigger/hass-repo-standards/blob/648dad941a118c80325f44c7a13cb5b5b9c1c788/docs/hacs.md)와 HACS/Hassfest 실제 실행, ignore는 이유·해제 조건 기록 | TODO | 공식 HACS default integration 목록 등재 확인(2026-10-20). 기존 brand/icon.png 공식 Xiaomi 원본 SHA256 일치. 변경 tree Hassfest PASS. 공식 HACS baseline4adac9e 10checks PASS(categories 누락 WARNING); 미게시 이번 tree HACS는 게시 후 검증 필요 |
+| HACS-03, HACS-05 | Default 여부는 목록 근거로 확인, [로컬 brand/icon.png 또는 원격 brands 근거](https://github.com/eigger/hass-repo-standards/blob/648dad941a118c80325f44c7a13cb5b5b9c1c788/docs/hacs.md)와 HACS/Hassfest 실제 실행, ignore는 이유·해제 조건 기록 | PASS | 공식목록 등재·기존 brand/icon.png 공식원본 일치. 구현1dcdbf75 [Validate](https://github.com/eigger/hass-lywsd02/actions/runs/39426664954): HACS·공식Core ec18d8 Hassfest 모두 PASS, ignore 없음 |
 | HACS-06 (권장) | description·topics·issue 경로·brands 및 사용하는 HACS 필드 지원 확인 | PASS | 원격 issues/discussions 활성 확인. 로컬 brands icon 256x256·고해상도512x512 기존 파일 보존; 공식 core_brands/xiaomi 출처 |
 | CI-01, CI-02 | Validate/Tests 공통화, 확장 job 유지, 공용 파일명·표시 이름·PR 대상 제한 없는 기본 이벤트·실제 기본 브랜치 push·dispatch·기존 schedule, 전용 CI 명명 형식 | PASS | 공용 Validate/Tests 및 정확한 중앙SHA 사용. 사용자2026-10-20 승인으로 main/master·daily를 중앙main·weekly로 변경. updater는 외부 requirements 없어 N/A |
 | CI-03, CI-05, CI-08 | 최소 권한·checkout 자격증명 비보존·timeout·concurrency, full SHA·갱신 관리, 비신뢰 입력·secrets 경계 | PASS | contents:read, checkout persist-credentials:false, 공용timeout/concurrency·Actions full SHA·dependabot 설정; actionlint 독립PASS |
-| CI-04, CI-07, CI-12 | 실패를 숨기지 않는 실제 `ha` 필수 테스트, 버전별 환경·cache·Ruff 설정과 required checks 이름 확인 | TODO | 실제 ha profile current/minimum 필수 job, Ruff0.17.1 pin. 원격 CI 및 저장소 required checks 설정 확인은 미실행 |
+| CI-04, CI-07, CI-12 | 실패를 숨기지 않는 실제 `ha` 필수 테스트, 버전별 환경·cache·Ruff 설정과 required checks 이름 확인 | PASS | 구현1dcdbf75 [Tests](https://github.com/eigger/hass-lywsd02/actions/runs/39426665033): current/minimum HA 각146 PASS 및 양lint PASS. 브랜치 보호 API404(비보호) 확인, required checks 강제설정 없음·설정변경 미실행 |
 | DEP-03, DEP-04, CI-09 | updater의 선택 package·연산자/extras/marker 보존, 안정 버전·major 정책, 실제 기본 브랜치·단일 bot branch·PR만 제안 | N/A | manifest에 updater 대상 외부 Python 패키지 없음; updater workflow를 만들지 않음 |
 | CI-09, CI-10, DEP-08 | 변경 tree의 새 하한·실제 HA 검증 후 PR 동기화, 실패 시 중단·변경 없음 시 기존 PR 정리, 후속 required checks 충족 방식 확인 | N/A | manifest updater 없음; 테스트 의존성 Dependabot 갱신은 별도 |
 
@@ -104,7 +104,7 @@
 | 규칙 ID / TODO | 남은 작업 / issue·PR | 담당자 | 완료 근거 |
 |---|---|---|---|
 | HA-04/09/11/12 | 기존 manual 연결확인·BLE proxy/service-change 검증·오류 번역키·MAC 로그 마스킹/중복warning 억제 | 유지보수자 | 해당 변경 및 실제 회귀/실물 검증 |
-| GOV-03/04, HACS-05, CI-12 | 게시 후 이번 tree HACS/원격 CI·required checks 확인 및 중앙 원격 반영 | 유지보수자 | 실제 run/commit 링크로 보완 |
+| GOV-04 | 중앙 원격의 해당 리포 현황 갱신 | 유지보수자 | 중앙 로컬 자기행 갱신 완료; 다른 세션 수정과 함께 게시하지 않음 |
 
 최종 검토 시 적용 대상 필수 `TODO`와 `EXCEPTION`, 이유가 있는 `N/A`, 권장 미채택을 구분해 적습니다. CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 실물 검증을 수행했다면 모델·펌웨어·어댑터/proxy·연결 경로와 결과를 별도로 기록합니다.
 
@@ -147,7 +147,7 @@ imagespec 미사용이면 실제 requirement/import 확인 근거와 N/A를 기�
 
 ## 실행 증거 (2026-10-20 최종 작업 tree)
 
-구현과 독립 검증은 별도 환경에서 실행했습니다. runtime/device 코드·테스트·README·CI 최종 변경 후 결과이며, commit/push/PR은 실행하지 않았습니다.
+구현과 독립 검증은 별도 환경에서 실행했습니다. 최초 로컬 검증 이후 구현을1dcdbf75로 커밋·push하고 PR #10을 생성했습니다. 아래 로컬 결과는 구현 tree 기준이며 원격 결과는 다음 절에 별도 기록합니다.
 
 - 구현: `/tmp/lywsd-ha-current/bin/python -m pytest tests/components/xiaomi_lywsd/ -q` 및 `/tmp/lywsd-ha-minimum/bin/python -m pytest tests/components/xiaomi_lywsd/ -q`: 각각146 passed. 각 `uv pip check --python <환경>/bin/python`: 정상.
 - 독립: `/private/tmp/lywsd-independent-review-current/bin/python -m pytest tests/components/xiaomi_lywsd/ -q`, `/private/tmp/lywsd-independent-review-minimum/bin/python -m pytest tests/components/xiaomi_lywsd/ -q`: 각각146 passed. 각 `uv pip check --python <환경>/bin/python`: 정상.
@@ -158,4 +158,13 @@ imagespec 미사용이면 실제 requirement/import 확인 근거와 N/A를 기�
 - HACS 공식 action image `ghcr.io/hacs/action` digest `187499a09c5d…`, linux/amd64: 공개 baseline `4adac9e3903efe58d8746bd5551ba7e36b1aadd8`만10 checks passed. 기존 categories 미선언 WARNING1건. 원본 action이 GitHub에서 ref를 내려받으므로 로컬 미게시 변경을 검증했다고 기록하지 않음.
 - 독립 로그: `/private/tmp/lywsd-independent-current-final-tests.log`, `/private/tmp/lywsd-independent-minimum-final-tests.log`, `/private/tmp/lywsd-independent-hassfest-final.log`, `/private/tmp/lywsd-independent-hacs-baseline.log`.
 
-판정: 요청한 공용 CI·문서·HACS Default 적용 및 로컬 검증 완료. 전체 표준 채택은 기존 HA-04/09/11/12와 게시 후 검증 TODO 때문에 진행 중입니다. 실물 기기 확인·원격 CI·브랜치 보호 설정 변경·신규 release는 수행하지 않았습니다.
+판정: 요청한 공용 CI·문서·HACS Default 적용 및 로컬 검증 완료. 전체 표준 채택은 기존 HA-04/09/11/12와 중앙원격 반영 TODO 때문에 진행 중입니다. 실물 기기 확인·브랜치 보호 설정 변경·신규 release는 수행하지 않았습니다.
+
+## PR 원격 검증
+
+- [PR #10](https://github.com/eigger/hass-lywsd02/pull/10), 구현 head `1dcdbf75f5857066b7488146d1c2a6dcd76b9e48`.
+- [Tests](https://github.com/eigger/hass-lywsd02/actions/runs/39426665033): current/minimum 각146 passed 및 각 Ruff lint PASS.
+- [Validate](https://github.com/eigger/hass-lywsd02/actions/runs/39426664954): HACS, Hassfest, Central template compliance 모두 PASS. baseline 검사와 구분되는 이번 구현의 원격 검증입니다.
+- 독립 review가 해당 구현 커밋 전체 diff 및 실제 양환경146개 재실행 결과를 확인했고 신규 머지 차단 문제 없음.
+- `gh api repos/eigger/hass-lywsd02/branches/main/protection`: HTTP404 Branch not protected. 보호 규칙을 추가하거나 검사 우회 옵션을 사용하지 않음.
+- 사용자 2026-10-20 본 채팅에서 PR 생성 및 문제없으면 squash merge 승인. 문서 증거 갱신 후 최종 head의 필수 CI를 다시 확인하고 머지합니다.
