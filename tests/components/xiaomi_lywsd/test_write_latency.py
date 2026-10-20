@@ -12,7 +12,7 @@ from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
     decode_time,
     encode_time,
 )
-from tests.fake_client import FakeBleakClient
+from tests.components.xiaomi_lywsd.fake_client import FakeBleakClient
 
 UTC = dt.timezone.utc
 
@@ -128,7 +128,9 @@ async def test_slow_link_does_not_trip_the_verify():
     clock = _Clock(step=1.5)  # 4.5 s across three round trips
     client = _client(clock, when)
 
-    result = await Lywsd02mmc().set_time(client, when, 9, monotonic=clock, sleeper=clock.sleep)
+    result = await Lywsd02mmc().set_time(
+        client, when, 9, monotonic=clock, sleeper=clock.sleep
+    )
     assert result.read_back_epoch > result.written_epoch - 2
 
 
@@ -143,7 +145,9 @@ async def test_a_genuinely_wrong_read_back_still_fails():
 
     client.read_gatt_char = stuck_read
     with pytest.raises(LywsdVerifyError):
-        await Lywsd02mmc().set_time(client, when, 9, monotonic=clock, sleeper=clock.sleep)
+        await Lywsd02mmc().set_time(
+            client, when, 9, monotonic=clock, sleeper=clock.sleep
+        )
 
 
 @pytest.mark.asyncio
@@ -162,5 +166,7 @@ async def test_drift_is_measured_against_the_same_instant():
     clock = _Clock(step=1.0)
     client = _client(clock, when)  # device is perfectly in sync
 
-    result = await Lywsd02mmc().set_time(client, when, 9, monotonic=clock, sleeper=clock.sleep)
+    result = await Lywsd02mmc().set_time(
+        client, when, 9, monotonic=clock, sleeper=clock.sleep
+    )
     assert abs(result.drift_seconds) <= 0.05

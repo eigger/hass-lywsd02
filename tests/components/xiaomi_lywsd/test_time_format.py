@@ -22,14 +22,14 @@ from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
 )
 from custom_components.xiaomi_lywsd.select import LywsdTimeFormatSelect
 from homeassistant.exceptions import HomeAssistantError
-from tests.stub_clock import StubClock
-from tests.fake_client import FakeBleakClient
+from tests.components.xiaomi_lywsd.stub_clock import StubClock
+from tests.components.xiaomi_lywsd.fake_client import FakeBleakClient
 
 UTC = dt.timezone.utc
 WHEN = dt.datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 
 
-def test_mode_payloads_are_seven_bytes():
+def test_mode_payloads_are_seven_bytes(hass):
     """Length is what tells the device a mode command from a time write."""
     assert encode_time_format("24h") == struct.pack("<IHB", 0, 0, 0x00)
     assert encode_time_format("12h") == struct.pack("<IHB", 0, 0, 0xAA)
@@ -37,13 +37,13 @@ def test_mode_payloads_are_seven_bytes():
     assert len(encode_time(0, 0)) == 5
 
 
-def test_unknown_format_rejected():
+def test_unknown_format_rejected(hass):
     with pytest.raises(ValueError):
         encode_time_format("13h")
 
 
 @pytest.mark.asyncio
-async def test_mode_write_is_followed_by_a_clock_write():
+async def test_mode_write_is_followed_by_a_clock_write(hass):
     """A firmware that reads the mode command as a time write must not be
     left showing 1970 — the clock is rewritten on the same connection."""
     device = Lywsd02mmc()
@@ -60,13 +60,12 @@ async def test_mode_write_is_followed_by_a_clock_write():
     assert result.written_epoch == epoch + 1
 
 
-def _entry():
+def _entry(hass):
     address = "AA:BB:CC:DD:EE:FF"
     entry = MagicMock()
     entry.entry_id = "entry-fmt"
     entry.data = {"address": address}
     entry.options = {"retry_count": 3, "scan_interval": 30}
-    hass = MagicMock()
     lock = asyncio.Lock()
     hass.data = {"xiaomi_lywsd": {"lock": lock}}
     coordinator = LywsdCoordinator(hass, entry, address, lock, Lywsd02mmc())
@@ -75,8 +74,8 @@ def _entry():
 
 
 @pytest.mark.asyncio
-async def test_select_reverts_and_explains_on_unsupported_device():
-    hass, entry = _entry()
+async def test_select_reverts_and_explains_on_unsupported_device(hass):
+    hass, entry = _entry(hass)
     coordinator = entry.runtime_data
     coordinator.data.time_format = "24h"
     select = LywsdTimeFormatSelect(hass, entry)
@@ -93,8 +92,8 @@ async def test_select_reverts_and_explains_on_unsupported_device():
 
 
 @pytest.mark.asyncio
-async def test_select_persists_choice_on_success():
-    hass, entry = _entry()
+async def test_select_persists_choice_on_success(hass):
+    hass, entry = _entry(hass)
     coordinator = entry.runtime_data
 
     async def fake_execute(hass_, entry_, op, **kwargs):
@@ -103,9 +102,7 @@ async def test_select_persists_choice_on_success():
         return "12h"
 
     select = LywsdTimeFormatSelect(hass, entry)
-    with patch(
-        "custom_components.xiaomi_lywsd.select.async_execute", new=fake_execute
-    ):
+    with patch("custom_components.xiaomi_lywsd.select.async_execute", new=fake_execute):
         await select.async_select_option("12h")
 
     assert select.current_option == "12h"
@@ -114,7 +111,7 @@ async def test_select_persists_choice_on_success():
 
 
 @pytest.mark.asyncio
-async def test_dropped_link_is_not_reported_as_unsupported():
+async def test_dropped_link_is_not_reported_as_unsupported(hass):
     """A disconnect mid-write says nothing about what the firmware implements."""
     device = Lywsd02mmc()
     client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
@@ -130,7 +127,7 @@ async def test_dropped_link_is_not_reported_as_unsupported():
 
 
 @pytest.mark.asyncio
-async def test_failed_clock_repair_is_its_own_error():
+async def test_failed_clock_repair_is_its_own_error(hass):
     """Mode landed, clock write did not — the display may read 1970."""
     device = Lywsd02mmc()
     epoch = int(WHEN.timestamp())
@@ -151,8 +148,8 @@ async def test_failed_clock_repair_is_its_own_error():
 
 
 @pytest.mark.asyncio
-async def test_select_keeps_option_when_only_the_clock_repair_failed():
-    hass, entry = _entry()
+async def test_select_keeps_option_when_only_the_clock_repair_failed(hass):
+    hass, entry = _entry(hass)
     coordinator = entry.runtime_data
     coordinator.data.time_format = "24h"
     select = LywsdTimeFormatSelect(hass, entry)
@@ -161,9 +158,7 @@ async def test_select_keeps_option_when_only_the_clock_repair_failed():
         coordinator.data.time_format = "12h"
         raise LywsdClockRepairError("boom")
 
-    with patch(
-        "custom_components.xiaomi_lywsd.select.async_execute", new=fake_execute
-    ):
+    with patch("custom_components.xiaomi_lywsd.select.async_execute", new=fake_execute):
         with pytest.raises(HomeAssistantError, match="시계 복구에 실패"):
             await select.async_select_option("12h")
 
@@ -172,7 +167,7 @@ async def test_select_keeps_option_when_only_the_clock_repair_failed():
 
 
 @pytest.mark.asyncio
-async def test_timeout_is_not_reported_as_unsupported():
+async def test_timeout_is_not_reported_as_unsupported(hass):
     """A slow link is not a firmware verdict either."""
     device = Lywsd02mmc()
     client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
@@ -187,12 +182,12 @@ async def test_timeout_is_not_reported_as_unsupported():
 
 
 @pytest.mark.asyncio
-async def test_battery_is_read_on_a_sync_connection():
+async def test_battery_is_read_on_a_sync_connection(hass):
     """Clock-only installs never poll, so the sync is the only chance."""
     from custom_components.xiaomi_lywsd import async_read_battery_into
     from custom_components.xiaomi_lywsd.device.lywsd02mmc import UUID_BATTERY
 
-    _hass, entry = _entry()
+    _hass, entry = _entry(hass)
     coordinator = entry.runtime_data
     client = FakeBleakClient({UUID_BATTERY: bytes([77])})
 
@@ -201,10 +196,10 @@ async def test_battery_is_read_on_a_sync_connection():
 
 
 @pytest.mark.asyncio
-async def test_unreadable_battery_never_breaks_a_sync():
+async def test_unreadable_battery_never_breaks_a_sync(hass):
     from custom_components.xiaomi_lywsd import async_read_battery_into
 
-    _hass, entry = _entry()
+    _hass, entry = _entry(hass)
     coordinator = entry.runtime_data
     coordinator.data.battery = 55
     client = FakeBleakClient({})  # no battery characteristic at all
@@ -214,7 +209,7 @@ async def test_unreadable_battery_never_breaks_a_sync():
 
 
 @pytest.mark.asyncio
-async def test_rejected_mode_but_working_clock_write_is_unsupported():
+async def test_rejected_mode_but_working_clock_write_is_unsupported(hass):
     """The clock write is the discriminator: the characteristic works, so the
     device refused this particular command."""
     device = Lywsd02mmc()
@@ -237,7 +232,7 @@ async def test_rejected_mode_but_working_clock_write_is_unsupported():
 
 
 @pytest.mark.asyncio
-async def test_both_writes_failing_is_not_blamed_on_firmware():
+async def test_both_writes_failing_is_not_blamed_on_firmware(hass):
     device = Lywsd02mmc()
     client = FakeBleakClient({UUID_TIME: encode_time(0, 0)})
 
@@ -251,7 +246,7 @@ async def test_both_writes_failing_is_not_blamed_on_firmware():
 
 
 @pytest.mark.asyncio
-async def test_battery_read_on_units_write_connection():
+async def test_battery_read_on_units_write_connection(hass):
     """display_units holds a connection too — it should not waste it."""
     from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
         UUID_BATTERY,
@@ -263,7 +258,7 @@ async def test_battery_read_on_units_write_connection():
     client = FakeBleakClient(
         {UUID_UNITS: encode_units("celsius"), UUID_BATTERY: bytes([81])}
     )
-    _hass, entry = _entry()
+    _hass, entry = _entry(hass)
     coordinator = entry.runtime_data
 
     await device.set_units(client, "fahrenheit")

@@ -16,7 +16,7 @@ from homeassistant.components.bluetooth import (
 from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlowWithReload,
+    OptionsFlow,
 )
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import callback
@@ -61,9 +61,7 @@ OPTIONS_SCHEMA = {
             unit_of_measurement="min",
         )
     ),
-    vol.Required(
-        CONF_CLIMATE_SENSORS, default=DEFAULT_CLIMATE_SENSORS
-    ): bool,
+    vol.Required(CONF_CLIMATE_SENSORS, default=DEFAULT_CLIMATE_SENSORS): bool,
     vol.Required(CONF_RETRY_COUNT, default=DEFAULT_RETRY_COUNT): NumberSelector(
         NumberSelectorConfig(
             min=1,
@@ -98,6 +96,7 @@ OPTIONS_SCHEMA = {
         )
     ),
 }
+
 
 @dataclasses.dataclass
 class Discovery:
@@ -226,7 +225,7 @@ class LywsdConfigFlow(ConfigFlow, domain=DOMAIN):
         return OptionsFlowHandler()
 
 
-class OptionsFlowHandler(OptionsFlowWithReload):
+class OptionsFlowHandler(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:

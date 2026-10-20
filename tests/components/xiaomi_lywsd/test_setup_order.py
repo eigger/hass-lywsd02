@@ -36,11 +36,13 @@ async def test_schedule_is_armed_before_platforms_are_forwarded():
     hass.config_entries.async_forward_entry_setups = forward
 
     now = dt.datetime(2026, 6, 1, tzinfo=dt.timezone.utc)
-    with patch("custom_components.xiaomi_lywsd.dr.async_get"), patch(
-        "custom_components.xiaomi_lywsd.async_track_point_in_time"
-    ), patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now), patch(
-        "custom_components.xiaomi_lywsd._async_maybe_create_proxy_issues"
-    ), patch("custom_components.xiaomi_lywsd._async_register_services"):
+    with (
+        patch("custom_components.xiaomi_lywsd.dr.async_get"),
+        patch("custom_components.xiaomi_lywsd.async_track_point_in_time"),
+        patch("custom_components.xiaomi_lywsd.dt_util.now", return_value=now),
+        patch("custom_components.xiaomi_lywsd._async_maybe_create_proxy_issues"),
+        patch("custom_components.xiaomi_lywsd._async_register_services"),
+    ):
         assert await async_setup_entry(hass, entry) is True
 
     assert seen["next_sync"] is not None, "entities saw an unscheduled coordinator"

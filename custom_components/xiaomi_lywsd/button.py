@@ -32,9 +32,7 @@ def _reraise_action_error(action: str, err: Exception) -> None:
     if isinstance(err, HomeAssistantError):
         raise err
     if isinstance(err, LywsdVerifyError):
-        raise HomeAssistantError(
-            "기기가 시간 쓰기를 확인하지 못했습니다"
-        ) from err
+        raise HomeAssistantError("기기가 시간 쓰기를 확인하지 못했습니다") from err
     raise HomeAssistantError(f"Failed to {action}: {err}") from err
 
 
@@ -69,14 +67,10 @@ class LywsdSyncTimeButton(ButtonEntity):
 
     async def async_press(self) -> None:
         utcoffset = dt_util.now().utcoffset()
-        tz_offset_hours = (
-            int(utcoffset.total_seconds() // 3600) if utcoffset else 0
-        )
+        tz_offset_hours = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
 
         async def _op(client, device):
-            result = await device.set_time(
-                client, dt_util.now(), tz_offset_hours
-            )
+            result = await device.set_time(client, dt_util.now(), tz_offset_hours)
             coord = self._entry.runtime_data
             coord.note_sync(
                 result.drift_seconds,

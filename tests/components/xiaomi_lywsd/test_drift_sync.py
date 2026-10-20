@@ -28,8 +28,8 @@ from custom_components.xiaomi_lywsd.device.lywsd02mmc import (
     encode_time,
 )
 from custom_components.xiaomi_lywsd.sensor import DIAGNOSTIC_SENSORS, LywsdSensor
-from tests.fake_client import FakeBleakClient
-from tests.stub_clock import StubClock
+from tests.components.xiaomi_lywsd.fake_client import FakeBleakClient
+from tests.components.xiaomi_lywsd.stub_clock import StubClock
 
 KST = dt.timezone(dt.timedelta(hours=9))
 # A fraction just short of the next second keeps set_time's boundary wait — a
@@ -37,8 +37,7 @@ KST = dt.timezone(dt.timedelta(hours=9))
 NOW = dt.datetime(2026, 3, 1, 12, 0, 0, 990000, tzinfo=KST)
 
 
-def _coord(options: dict | None = None):
-    hass = MagicMock()
+def _coord(hass, options: dict | None = None):
     hass.data = {"xiaomi_lywsd": {"lock": asyncio.Lock()}}
     entry = MagicMock()
     entry.entry_id = "drift"
@@ -109,16 +108,14 @@ async def _poll(coord, client):
 
 def _time_writes(client) -> list[bytes]:
     return [
-        payload
-        for uuid, payload, _resp in client.writes
-        if uuid == UUID_TIME.lower()
+        payload for uuid, payload, _resp in client.writes if uuid == UUID_TIME.lower()
     ]
 
 
 @pytest.mark.asyncio
-async def test_poll_syncs_on_its_own_connection_when_drift_exceeds_tolerance():
+async def test_poll_syncs_on_its_own_connection_when_drift_exceeds_tolerance(hass):
     """The whole point: the correction rides on the poll, not a second connect."""
-    _hass, _entry, coord = _coord({"auto_sync_tolerance": 60})
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     client = _client(300.0)
 
     data, connect = await _poll(coord, client)
@@ -142,10 +139,10 @@ def _drift_sensor(coord) -> LywsdSensor:
 
 
 @pytest.mark.asyncio
-async def test_drift_sensor_reports_the_measured_residual_after_a_sync():
+async def test_drift_sensor_reports_the_measured_residual_after_a_sync(hass):
     """After a write the sensor must show what the read-back measured, not an
     assumed zero — the device stores whole seconds and rarely lands exactly."""
-    _hass, _entry, coord = _coord({"auto_sync_tolerance": 60})
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     sensor = _drift_sensor(coord)
     assert sensor.available is False  # nothing measured yet
 
@@ -161,10 +158,10 @@ async def test_drift_sensor_reports_the_measured_residual_after_a_sync():
 
 
 @pytest.mark.asyncio
-async def test_drift_sensor_tracks_the_error_between_syncs():
+async def test_drift_sensor_tracks_the_error_between_syncs(hass):
     """The point of an entity over an attribute: successive polls are separate
     states, so a growing error is visible as history."""
-    _hass, _entry, coord = _coord({"auto_sync_tolerance": 60})
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     seen = []
     for offset in (5.0, 12.0, 30.0):
         data, _connect = await _poll(coord, _client(offset))
@@ -179,11 +176,11 @@ async def test_drift_sensor_tracks_the_error_between_syncs():
 
 
 @pytest.mark.asyncio
-async def test_a_poll_sync_feeds_the_rate_and_re_arms_the_schedule():
+async def test_a_poll_sync_feeds_the_rate_and_re_arms_the_schedule(hass):
     """A drift-triggered sync is a full sync: it measures a rate, and the next
     one is a fresh interval derived from that rate — not the leftover of the
     countdown it interrupted."""
-    _hass, entry, coord = _coord({"auto_sync_tolerance": 60})
+    _hass, entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     coord.data.last_sync = NOW - dt.timedelta(days=10)
     rearmed = []
     coord.reschedule_auto_sync = lambda: rearmed.append(True)
@@ -201,8 +198,8 @@ async def test_a_poll_sync_feeds_the_rate_and_re_arms_the_schedule():
 
 
 @pytest.mark.asyncio
-async def test_poll_reads_the_clock_but_writes_nothing_within_tolerance():
-    _hass, _entry, coord = _coord({"auto_sync_tolerance": 60})
+async def test_poll_reads_the_clock_but_writes_nothing_within_tolerance(hass):
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     client = _client(10.0)
 
     data, _connect = await _poll(coord, client)
@@ -216,10 +213,12 @@ async def test_poll_reads_the_clock_but_writes_nothing_within_tolerance():
 
 
 @pytest.mark.asyncio
-async def test_sync_is_not_repeated_every_poll_when_the_write_does_not_take(caplog):
+async def test_sync_is_not_repeated_every_poll_when_the_write_does_not_take(
+    hass, caplog
+):
     """A clock that stays wrong after a write is a firmware question, not a
     reason to burn the battery correcting it every poll."""
-    _hass, _entry, coord = _coord({"auto_sync_tolerance": 60})
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     coord.data.last_sync = NOW - dt.timedelta(minutes=10)
     client = _client(32400.0)  # exactly one timezone away — the epoch hazard
 
@@ -238,8 +237,8 @@ async def test_sync_is_not_repeated_every_poll_when_the_write_does_not_take(capl
 
 
 @pytest.mark.asyncio
-async def test_clock_is_left_alone_when_automatic_sync_is_off():
-    _hass, _entry, coord = _coord({"auto_sync": "0"})
+async def test_clock_is_left_alone_when_automatic_sync_is_off(hass):
+    _hass, _entry, coord = _coord(hass, {"auto_sync": "0"})
     client = _client(300.0)
 
     data, _connect = await _poll(coord, client)
@@ -250,8 +249,8 @@ async def test_clock_is_left_alone_when_automatic_sync_is_off():
 
 
 @pytest.mark.asyncio
-async def test_a_failed_clock_read_does_not_fail_the_poll():
-    _hass, _entry, coord = _coord()
+async def test_a_failed_clock_read_does_not_fail_the_poll(hass):
+    _hass, _entry, coord = _coord(hass)
     # No UUID_TIME in the store — FakeBleakClient raises KeyError on read.
     client = FakeBleakClient(
         {UUID_BATTERY: b"\x5a"}, notify={UUID_DATA: b"\x1a\x09\x37"}
@@ -264,7 +263,7 @@ async def test_a_failed_clock_read_does_not_fail_the_poll():
 
 
 @pytest.mark.asyncio
-async def test_set_time_reuses_a_reading_instead_of_reading_twice():
+async def test_set_time_reuses_a_reading_instead_of_reading_twice(hass):
     """The poll decides from a reading; paying for a second one would waste the
     round trip the decision was made on."""
     device = Lywsd02mmc()
@@ -280,8 +279,8 @@ async def test_set_time_reuses_a_reading_instead_of_reading_twice():
     assert reading.drift_seconds == pytest.approx(300.0, abs=1.0)
 
 
-def test_recent_in_tolerance_reading_lets_a_scheduled_sync_stand_down():
-    _hass, _entry, coord = _coord({"auto_sync_tolerance": 60})
+def test_recent_in_tolerance_reading_lets_a_scheduled_sync_stand_down(hass):
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     options = {**_entry.data, **_entry.options}
     coord.data.clock_checked = NOW - dt.timedelta(minutes=5)
     coord.data.observed_drift = 12.0
@@ -308,8 +307,8 @@ def test_recent_in_tolerance_reading_lets_a_scheduled_sync_stand_down():
 
 
 @pytest.mark.asyncio
-async def test_scheduled_sync_skips_the_connection_after_a_clean_reading():
-    hass, entry, coord = _coord({"auto_sync_tolerance": 60})
+async def test_scheduled_sync_skips_the_connection_after_a_clean_reading(hass):
+    hass, entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
     coord.data.clock_checked = NOW - dt.timedelta(minutes=5)
     coord.data.observed_drift = 3.0
 

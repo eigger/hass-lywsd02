@@ -48,8 +48,10 @@ async def main(address: str, timeout: float) -> None:
             await asyncio.wait_for(event.wait(), timeout)
             latency = time.monotonic() - t0
             payload = holder["payload"]
-            print(f"first_notify_s={latency:.3f} hex={payload.hex()} "
-                  f"decoded={decode(payload)}")
+            print(
+                f"first_notify_s={latency:.3f} hex={payload.hex()} "
+                f"decoded={decode(payload)}"
+            )
         except TimeoutError:
             print(f"TIMEOUT after {timeout}s — no notify")
         finally:

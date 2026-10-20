@@ -12,11 +12,10 @@ from custom_components.xiaomi_lywsd.coordinator import LywsdCoordinator, LywsdDa
 from custom_components.xiaomi_lywsd.device import Lywsd02mmc
 from custom_components.xiaomi_lywsd.device.base import ClimateReading
 from custom_components.xiaomi_lywsd.device.lywsd02mmc import UUID_BATTERY, UUID_DATA
-from tests.fake_client import FakeBleakClient
+from tests.components.xiaomi_lywsd.fake_client import FakeBleakClient
 
 
 def _coord(hass=None, entry=None):
-    hass = hass or MagicMock()
     hass.data = {"xiaomi_lywsd": {"lock": asyncio.Lock()}}
     entry = entry or MagicMock()
     entry.entry_id = "e1"
@@ -36,8 +35,8 @@ def _coord(hass=None, entry=None):
 
 
 @pytest.mark.asyncio
-async def test_poll_cycle_order_notify_battery_disconnect():
-    hass, entry, coord = _coord()
+async def test_poll_cycle_order_notify_battery_disconnect(hass):
+    hass, entry, coord = _coord(hass)
     client = FakeBleakClient(
         {UUID_BATTERY: b"\x64"},
         notify={UUID_DATA: b"\x1a\x09\x37"},
@@ -72,8 +71,8 @@ async def test_poll_cycle_order_notify_battery_disconnect():
 
 
 @pytest.mark.asyncio
-async def test_poll_timeout_raises_update_failed_and_disconnects():
-    hass, entry, coord = _coord()
+async def test_poll_timeout_raises_update_failed_and_disconnects(hass):
+    hass, entry, coord = _coord(hass)
     client = FakeBleakClient({}, notify_timeout=True)
     client.disconnect = AsyncMock(wraps=client.disconnect)
     ble = MagicMock()
@@ -107,8 +106,8 @@ async def test_poll_timeout_raises_update_failed_and_disconnects():
 
 
 @pytest.mark.asyncio
-async def test_poll_failure_increments_failure_count_once():
-    hass, entry, coord = _coord()
+async def test_poll_failure_increments_failure_count_once(hass):
+    hass, entry, coord = _coord(hass)
     assert coord.data.failure_count == 0
 
     async def boom(*args, **kwargs):
@@ -125,8 +124,8 @@ async def test_poll_failure_increments_failure_count_once():
 
 
 @pytest.mark.asyncio
-async def test_partial_failure_preserves_previous_battery():
-    hass, entry, coord = _coord()
+async def test_partial_failure_preserves_previous_battery(hass):
+    hass, entry, coord = _coord(hass)
     coord.data = LywsdData(battery=77, temperature=20.0, humidity=40)
 
     async def _op(client, device):
@@ -152,8 +151,7 @@ async def test_partial_failure_preserves_previous_battery():
     assert data.units == "celsius"
 
 
-def test_climate_sensors_off_disables_polling():
-    hass = MagicMock()
+def test_climate_sensors_off_disables_polling(hass):
     hass.data = {"xiaomi_lywsd": {"lock": asyncio.Lock()}}
     entry = MagicMock()
     entry.entry_id = "e1"
@@ -170,7 +168,7 @@ def test_climate_sensors_off_disables_polling():
     assert coord.update_interval is None
 
 
-def test_default_scan_interval_is_30_minutes():
+def test_default_scan_interval_is_30_minutes(hass):
     from custom_components.xiaomi_lywsd.const import (
         DEFAULT_AUTO_SYNC,
         DEFAULT_CLIMATE_SENSORS,
@@ -179,7 +177,7 @@ def test_default_scan_interval_is_30_minutes():
         scan_interval_seconds,
     )
 
-    hass, entry, _coord_unused = _coord()
+    hass, entry, _coord_unused = _coord(hass)
     entry.options = {"climate_sensors": True}
     coord2 = LywsdCoordinator(
         hass,
@@ -202,8 +200,8 @@ def test_default_scan_interval_is_30_minutes():
     assert coord2.update_interval.total_seconds() == 1800
 
 
-def test_default_options_disable_climate_polling():
-    hass, entry, coord = _coord()
+def test_default_options_disable_climate_polling(hass):
+    hass, entry, coord = _coord(hass)
     entry.options = {}
     coord_default = LywsdCoordinator(
         hass,
@@ -216,21 +214,19 @@ def test_default_options_disable_climate_polling():
 
 
 @pytest.mark.asyncio
-async def test_unknown_units_warns_once_with_hex(caplog):
+async def test_unknown_units_warns_once_with_hex(hass, caplog):
     import logging
 
     from custom_components.xiaomi_lywsd.device.base import ClimateReading
 
-    hass, entry, coord = _coord()
+    hass, entry, coord = _coord(hass)
     caplog.set_level(logging.WARNING)
 
     async def fake_execute(hass, entry, op, wrap_errors=False):
         # Invoke op with a client whose get_units path fails via device
         client = MagicMock()
         device = MagicMock()
-        device.read_climate = AsyncMock(
-            return_value=ClimateReading(20.0, 40)
-        )
+        device.read_climate = AsyncMock(return_value=ClimateReading(20.0, 40))
         device.get_battery = AsyncMock(return_value=80)
         device.get_units = AsyncMock(
             side_effect=Exception("unknown units payload hex=00 raw=b'\\x00'")

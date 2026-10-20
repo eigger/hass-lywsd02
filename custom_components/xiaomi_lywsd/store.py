@@ -100,9 +100,7 @@ class LywsdStore:
                 "clock_drift": clock_drift,
                 "drift_rate_per_day": drift_rate_per_day,
                 "observed_drift": observed_drift,
-                "clock_checked": (
-                    clock_checked.isoformat() if clock_checked else None
-                ),
+                "clock_checked": (clock_checked.isoformat() if clock_checked else None),
                 "battery": battery,
                 "units": units,
                 "time_format": time_format,

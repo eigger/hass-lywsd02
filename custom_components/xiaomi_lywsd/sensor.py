@@ -143,8 +143,7 @@ class LywsdSensor(CoordinatorEntity, SensorEntity):
             if not self._lywsd.last_update_success:
                 return False
             return (
-                getattr(self._lywsd.data, self.entity_description.key, None)
-                is not None
+                getattr(self._lywsd.data, self.entity_description.key, None) is not None
             )
         # Battery comes from any connection, so it is available once read —
         # a failed climate poll says nothing about a value taken at the last
