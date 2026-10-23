@@ -16,7 +16,7 @@ Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
-The Downloads badge counts GitHub release asset downloads across all releases, not active installations. HACS source-file installations are not counted; ZIP release distribution is not used.
+The Downloads badge counts GitHub release asset downloads across all releases, not active installations.
 
 > [!IMPORTANT]
 > **Beta.** Protocol notes live in [`docs/protocol.md`](docs/protocol.md); some

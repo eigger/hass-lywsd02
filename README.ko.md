@@ -16,7 +16,7 @@ Xiaomi LYWSD02 / LYWSD02MMC E-Ink 온습도계를 위한 Home Assistant 통합�
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
-Downloads 배지는 모든 GitHub 릴리스의 첨부 asset 다운로드 합계이며 활성 설치 수가 아닙니다. HACS 소스 파일 설치는 집계되지 않으며 ZIP 릴리스 배포는 사용하지 않습니다.
+Downloads 배지는 모든 GitHub 릴리스의 첨부 asset 다운로드 합계이며 활성 설치 수가 아닙니다.
 
 > [!IMPORTANT]
 > **베타 버전입니다.** 프로토콜 설명은 [`docs/protocol.md`](docs/protocol.md)에 있으며 일부
