@@ -1,7 +1,7 @@
 <!-- hass-standards:header:start -->
 # hass-lywsd02
 
-Home Assistant integration for the Xiaomi LYWSD02 / LYWSD02MMC E-Ink thermo-hygrometer.
+Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration
 
 **English** | [한국어](README.ko.md)
 
