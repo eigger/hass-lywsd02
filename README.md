@@ -16,42 +16,30 @@ Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
-The Downloads badge counts GitHub release asset downloads across all releases, not active installations.
-
-> [!IMPORTANT]
-> **Beta.** Protocol notes live in [`docs/protocol.md`](docs/protocol.md); some
-> values are still unconfirmed. Report your firmware version in issues.
+Downloads counts release asset downloads, not active installations.
 
 ## Why this integration
 
-This device (`device_id 0x2542`) advertises MiBeacon frames with
-**`object_include=0`** — no sensor payload. Core `xiaomi_ble` silently drops
-those frames and never opens a GATT connection to this model. Temperature,
-humidity, and battery are only reachable over **GATT** (notify on
-`EBE0CCC1` for climate, read on `EBE0CCC4` for battery).
+This device (`device_id 0x2542`) advertises MiBeacon frames with `object_include=0`
+(no sensor payload), so core `xiaomi_ble` drops them and never opens a GATT
+connection. Temperature, humidity and battery are only reachable over GATT.
 
-So this is not a "clock helper on top of core" — it's the integration that
-covers LYWSD02-class devices core cannot read at all.
-
-| Feature | Provided by |
+| Feature | Notes |
 | --- | --- |
-| Temperature / humidity | **This integration** (periodic GATT poll) |
-| Battery | **This integration** (read on any open connection, incl. clock sync) |
-| E-Ink clock time sync | **This integration** |
-| °C / °F display units (screen) | **This integration** |
-| 12h / 24h clock mode (screen) | **This integration** |
+| Temperature / humidity | Periodic GATT poll (opt-in) |
+| Battery | Read on any open connection |
+| E-Ink clock sync | Manual, scheduled, or drift-triggered |
+| °C / °F and 12h / 24h | Changes the E-Ink screen only; sensors always report °C |
 
-The **Display units** and **Clock mode** selects change the E-Ink screen only.
-Sensor values always arrive in °C; Home Assistant converts to the user's
-preferred unit.
-
-## Supported Models
+## Supported models
 
 | Model | Firmware | Status |
-|-------|----------|--------|
+| --- | --- | --- |
 | LYWSD02MMC | stock | confirmed |
-| LYWSD02 | stock | should work (same protocol family) |
-| LYWSD03MMC | — | **not supported** — see [pvvx/ATC](https://github.com/pvvx/ATC_MiThermometer) |
+| LYWSD02 | stock | should work (same protocol) |
+| LYWSD03MMC | — | not supported — see [pvvx/ATC](https://github.com/pvvx/ATC_MiThermometer) |
+
+Protocol notes: [`docs/protocol.md`](docs/protocol.md). Please include your firmware version in issues.
 
 ## Installation
 
@@ -59,23 +47,13 @@ preferred unit.
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-lywsd02)
 <!-- hass-standards:installation:end -->
 
-1. Install **Xiaomi LYWSD** from the HACS default integration catalog, or copy `custom_components/xiaomi_lywsd` into your Home Assistant `custom_components` directory.
+1. Install **Xiaomi LYWSD** from HACS, or copy `custom_components/xiaomi_lywsd` into your `custom_components` directory.
 2. Restart Home Assistant.
-3. Go to **Settings** → **Integrations** and add **Xiaomi LYWSD**, or accept the Bluetooth discovery prompt.
-4. If the device isn't discovered, add it manually by MAC address.
+3. Add **Xiaomi LYWSD** under **Settings** → **Devices & services**, or accept the Bluetooth discovery prompt (otherwise add it by MAC address).
 
-## Important Notice
+### Bluetooth proxy
 
-Use a **Bluetooth proxy** instead of a built-in adapter — polling and writes need a **connectable** scanner.
-
-> [!TIP]
-> Hardware recommendations: [Great ESP32 Board for an ESPHome Bluetooth Proxy](https://community.home-assistant.io/t/great-esp32-board-for-an-esphome-bluetooth-proxy/916767/31)
-
-For proxy flashing, Home Assistant registration and common troubleshooting, follow the [Bluetooth proxy setup guide](https://github.com/eigger/blesession/blob/main/docs/bluetooth.md).
-
-LYWSD02-class devices need a working coin cell and an available connectable scanner. Close other applications that hold a GATT connection before setup or polling. This integration does not request a bindkey or implement pairing/bonding. LYWSD02MMC stock firmware is confirmed; the original LYWSD02 remains unconfirmed. No additional hardware/proxy validation is claimed here.
-
-**`bluetooth_proxy` must have `active: true`.**
+Use a **Bluetooth proxy** rather than a built-in adapter: polling and writes need a connectable scanner, and `bluetooth_proxy` must have `active: true`. Close other apps holding a GATT connection to the device. No bindkey or pairing is needed.
 
 ```yaml
 esp32_ble_tracker:
@@ -83,156 +61,67 @@ bluetooth_proxy:
   active: true
 ```
 
+See the [Bluetooth proxy setup guide](https://github.com/eigger/blesession/blob/main/docs/bluetooth.md) and [hardware recommendations](https://community.home-assistant.io/t/great-esp32-board-for-an-esphome-bluetooth-proxy/916767/31).
+
 ## Options
 
-Configure via **Settings** → **Devices & Services** → **Xiaomi LYWSD** → **Configure**:
+**Settings** → **Devices & services** → **Xiaomi LYWSD** → **Configure**:
 
 | Option | Default | Range | Description |
-|--------|---------|-------|-------------|
-| **Enable climate sensors** | Off | on/off | Creates Temperature / Humidity entities and starts periodic GATT polling. They stay unavailable until the first successful reading |
-| **Poll interval** | 30 min | 2–60 min | Only used when climate sensors are enabled. LYWSD02 uses a **CR2032** coin cell; BLE connect time dominates drain |
-| **Automatic time sync** | Automatic | off / 1 / 7 / 30 / 90 / 180 days / automatic | How often to write the Home Assistant clock to the device |
-| **Tolerated clock error** | 60 s | 10–3600 s | Sets the Automatic interval, and is the threshold the drift check syncs on |
-| **BLE retry count** | 3 | 1–10 | Retries when a BLE write fails |
+| --- | --- | --- | --- |
+| Enable climate sensors | Off | on/off | Creates temperature / humidity entities and starts GATT polling |
+| Poll interval | 30 min | 2–60 min | Only with climate sensors. The device uses a CR2032; BLE connect time dominates drain |
+| Automatic time sync | Automatic | off / 1 / 7 / 30 / 90 / 180 days / automatic | How often to write the Home Assistant clock to the device |
+| Tolerated clock error | 60 s | 10–3600 s | Sets the Automatic interval and the threshold for drift-triggered sync |
+| BLE retry count | 3 | 1–10 | Retries when a write fails |
 
-> [!TIP]
-> Battery is **not** part of climate sensors — it's one byte read on whatever connection is already open, so a clock-only install still gets a battery level at every automatic sync.
+## Time sync
 
-### Automatic (drift based) sync
+- **Automatic** measures drift at each sync and sets the next interval to *tolerated error ÷ drift rate*, clamped to 1–180 days (7 days until two syncs are observed). A manual **Sync time** also counts and restarts the countdown.
+- The schedule is stored on disk, so a restart does not reset it; a sync that came due while Home Assistant was down runs shortly after startup. Repeated failures back off from 30 min to 6 h.
+- Writes are aimed at a second boundary, since the device stores whole seconds.
 
-Each sync measures how far the clock had wandered since the previous one, which
-gives a drift rate in seconds per day. The next interval is the tolerated error
-divided by that rate, clamped to 1–180 days: an accurate unit stretches out to
-months on its own, a sloppy one keeps a short cycle. Until two syncs have been
-observed it falls back to 7 days; a clock that holds to within the device's
-one-second resolution goes straight to the 180-day ceiling.
+### Check on every poll (climate sensors on)
 
-Each sample counts for as much as its duration earns. The clock reads in whole
-seconds, so twelve hours of it carries about ±2 s/day of rounding error while a
-week carries ±0.14 — samples reach full weight at a week and shorter ones scale
-down in proportion. Pressing **Sync time** by hand between automatic syncs
-therefore refines the estimate without derailing it.
+Each poll already holds a connection, so it also reads the clock and, on the same connection, syncs when:
 
-A manual sync is a real sync: it corrects the clock, updates `last_sync`, and
-**restarts the countdown**, so the next automatic one is a full interval from
-when you pressed it rather than from the previous automatic sync. Watch
-`sensor.*_next_sync` move.
+- the error exceeds the tolerated clock error, or
+- the UTC offset stored on the device differs from Home Assistant's, which is how a **daylight saving change** is picked up (drift alone cannot see it).
 
-The schedule is **stored on disk**, so restarting Home Assistant does not
-restart the countdown — a 30-day interval still fires on day 30 even on a box
-that reboots weekly. A sync that came due while Home Assistant was down runs
-shortly after startup. Repeated failures back off exponentially (30 min → 6 h)
-rather than retrying every minute.
+A poll that finds the clock within tolerance skips the sync that was scheduled. If the clock is still wrong less than an hour after a sync, the write is not repeated and a warning is logged; this usually means a firmware whose epoch is local rather than UTC ([`docs/protocol.md`](docs/protocol.md) §3), so please report it. Clock-only installs (climate off, the default) never poll, so DST is applied at the next sync.
 
-The write itself is **aimed at a second boundary** rather than rounded to one —
-the device stores whole seconds, and rounding leaves a consistent bias in
-whichever direction the link latency happens to fall. The next boundary the
-write can still reach is chosen, and the write is held back until that boundary
-minus one estimated one-way trip, so the device receives second T at second T.
+## Clock diagnostics
 
-### Drift check on the climate poll
-
-With climate sensors enabled, a connection is already open every poll interval,
-and **the connection is what costs battery** — a 5-byte clock read on top of it
-is one round trip. So every poll reads the clock, and **syncs on that same
-connection** the moment the error exceeds the tolerated clock error. Nothing is
-deferred to the schedule: rescheduling would only mean opening a second
-connection later to do what this one could already do.
-
-It works the other way too. When a poll has just measured an error well inside
-the tolerance, the sync it was scheduled to do is **skipped** and the interval
-starts over — a whole connection saved, on the evidence that there was nothing
-to correct.
-
-What this catches that no schedule can: a **battery change or a firmware reset**
-that sends the display to 1970 is noticed within one poll instead of within one
-sync interval, which on an accurate unit can be six months.
-
-Two guards, because the read is cheap and the write is not:
-
-- If the clock is still out of tolerance **less than an hour after a sync**, the
-  write is not repeated and a warning is logged once. A write that does not take
-  points at the firmware — most likely an epoch that is local rather than UTC
-  (see [`docs/protocol.md`](docs/protocol.md) §3), which would read as a
-  constant timezone-sized error no write can close. Please report it.
-- A clock read or write that fails never fails the poll. Climate is the poll's
-  job; the next poll retries, and the schedule stays armed as the safety net.
-
-Clock-only installs (climate sensors off — the default) never poll, so nothing
-changes for them: the adaptive schedule remains the only thing that opens a
-connection.
-
-### Clock diagnostics
-
-Two timestamp sensors, each carrying its context as attributes rather than
-spawning more entities:
-
-**Last sync** — when the clock was last corrected.
-
-| Attribute | Meaning |
+| Sensor | Description |
 | --- | --- |
-| `drift_seconds` | Error measured just before that correction |
-| `drift_seconds_per_day` | Smoothed drift rate driving Automatic mode |
-| `write_compensation_seconds` | Seconds between the sampled time and the boundary aimed at — link latency plus the wait for the boundary |
+| Last sync | When the clock was last corrected. Attributes: `drift_seconds`, `drift_seconds_per_day`, `write_compensation_seconds` |
+| Next sync | When the next automatic sync is due (`unknown` if off). Attributes: `auto_sync`, `interval_days`, `drift_seconds_per_day` |
+| Clock drift | Last measured error in seconds (positive = display is fast). Updated on every poll and sync |
 
-**Clock drift** — the device clock's error in seconds, as last *measured*: signed, so positive means the display is running fast. It is a sensor rather than an attribute because the shape over time is the point — with climate polling on it ramps up between syncs and snaps back at each one, and a unit whose ramp steepens is a unit whose battery is going. `clock_checked` (also an attribute here) says when the reading was taken.
-
-The value after a sync is the one the write's own read-back measured, not an assumed zero — the device stores whole seconds, so landing exactly on target is luck rather than the norm. Without climate polling the sensor updates once per sync.
-
-**Expect the reading to scatter by about a second.** The clock answers in whole
-seconds, so an epoch of N only says the device is somewhere in [N, N+1); the
-middle of that window is reported, which is unbiased but still lands anywhere
-in a one-second band. Where in the band depends on how the poll's timing fell
-against the device's own tick, and connection setup varies by a few hundred
-milliseconds every time — so it is redrawn on each poll rather than sweeping
-slowly. Link round-trip asymmetry adds a little more.
-
-That noise floor is around a second, while an accurate unit drifts a fraction
-of a second per day. So a day of history looks like scatter, not a ramp, and
-the trend only clears the noise after a week or two. To see it sooner, average
-it: a **Statistics** helper over the drift sensor with a 24-hour window and
-`mean` cuts the scatter by about five times, because each reading's error is
-an independent draw rather than a slow wander.
-
-**Next sync** — when the next automatic sync is due. `unknown` when automatic sync is off; the attributes say so outright.
-
-| Attribute | Meaning |
-| --- | --- |
-| `auto_sync` | `off`, `auto`, or the configured number of days |
-| `interval_days` | The cadence in effect. Unchanged by a failure backoff |
-| `drift_seconds_per_day` | The rate the interval was derived from |
-
-So `state_attr('sensor.lywsd02_xxxx_next_sync', 'auto_sync') == 'off'` is enough
-to alert on a device whose clock is no longer being corrected.
-
----
+The clock answers in whole seconds, so expect drift readings to scatter by about a second. A **Statistics** helper (24 h, `mean`) smooths it. To alert on a device that is no longer corrected, check `state_attr('sensor.lywsd02_xxxx_next_sync', 'auto_sync') == 'off'`.
 
 ## Entities
 
 | Platform | Entity | Notes |
-|----------|--------|-------|
-| Sensor | Temperature / Humidity | Periodic GATT poll; requires **Enable climate sensors** |
-| Sensor | Battery | Read on any open connection, including automatic sync |
-| Sensor | Last sync / Next sync | Diagnostic; drift and schedule attributes (see [Clock diagnostics](#clock-diagnostics)) |
-| Sensor | Clock drift | Diagnostic; the measured clock error in seconds, updated on every poll and every sync |
-| Sensor | Failure count / Last failure | Diagnostic |
-| Sensor | Connection duration | Diagnostic; seconds the last/current BLE session stayed open |
+| --- | --- | --- |
+| Sensor | Temperature / Humidity | Requires **Enable climate sensors** |
+| Sensor | Battery | Read on any open connection |
+| Sensor | Last sync / Next sync / Clock drift | Diagnostic |
+| Sensor | Failure count / Last failure / Connection duration | Diagnostic |
 | Binary sensor | Connectivity | BLE session open / closed |
-| Select | Display units | °C / °F, E-Ink screen only |
-| Select | Clock mode | 12h / 24h, E-Ink screen only |
-| Button | Sync time | Write current Home Assistant time to the E-Ink clock |
-
----
+| Select | Display units | °C / °F, screen only |
+| Select | Clock mode | 12h / 24h, screen only |
+| Button | Sync time | Write the current time to the clock |
 
 ## Services
 
-### `xiaomi_lywsd.sync_time`
+All services take `target: device_id`.
 
-Connect once, write the current time (or `timezone_offset` if given), and re-arm the automatic sync schedule.
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `timezone_offset` | no | Home Assistant timezone | UTC offset in hours (`-12` to `14`) |
+| Service | Description |
+| --- | --- |
+| `xiaomi_lywsd.sync_time` | Write the current time and re-arm the schedule. Optional `timezone_offset` (hours, `-12` to `14`; default: Home Assistant timezone) |
+| `xiaomi_lywsd.read_state` | Refresh the **Display units** state from the device |
+| `xiaomi_lywsd.dump_gatt` | Return the GATT service tree with readable values as hex, including via a proxy. Use in **Developer tools** → **Actions** with a response variable |
 
 ```yaml
 action: xiaomi_lywsd.sync_time
@@ -240,51 +129,9 @@ target:
   device_id: <your device>
 ```
 
-### `xiaomi_lywsd.read_state`
-
-Connect once and refresh the **Display units** state from the device.
-
-```yaml
-action: xiaomi_lywsd.read_state
-target:
-  device_id: <your device>
-```
-
-### `xiaomi_lywsd.dump_gatt`
-
-Connect once (including via Bluetooth proxy) and return the full GATT service
-tree with readable characteristic values as hex. Use in **Developer Tools →
-Actions** with **Response variable** — the standalone `tools/dump_gatt.py`
-script can't reach devices that are only visible through a proxy.
-
-```yaml
-action: xiaomi_lywsd.dump_gatt
-target:
-  device_id: <your device>
-```
-
----
-
-## Upgrading from 0.1.x
-
-Config entries are migrated to version 2 on first load: `auto_sync_hours`
-becomes the day-based `auto_sync` choice (**an install that never touched the
-options stays off**, matching the 0.1.x default), and a poll interval stored in
-seconds becomes minutes.
-
-`sensor.*_clock_drift` is no longer created — its values moved onto `last_sync`
-attributes. The old entity stays in the registry as unavailable until deleted
-by hand.
-
-Since 0.2.1 the schedule has its own entity, so `next_sync` is **no longer an
-attribute of `last_sync`** — read `sensor.*_next_sync` instead. Templates
-written against the 0.2.0 attribute need updating.
-
----
-
 ## Development
 
-The current test environment uses Python 3.14 / Home Assistant 2026.10.2. Minimum support remains Home Assistant 2025.1.0, tested separately with Python 3.13 and `requirements-test-minimum.txt`.
+Tests run on Python 3.14 / Home Assistant 2026.10.2; the minimum supported Home Assistant is 2025.1.0 (Python 3.13, `requirements-test-minimum.txt`).
 
 ```bash
 pip install -r requirements-test.txt -r requirements_lint.txt
@@ -292,23 +139,13 @@ python -m ruff check custom_components/ tests/ tools/
 python -m pytest tests/components/xiaomi_lywsd/ -v
 ```
 
-Standalone protocol probes (Mac / adapter with direct BLE access only — see
-`xiaomi_lywsd.dump_gatt` above for devices behind a proxy):
-
-```bash
-python tools/dump_gatt.py AA:BB:CC:DD:EE:FF
-python tools/probe_climate.py AA:BB:CC:DD:EE:FF
-python tools/probe_time.py AA:BB:CC:DD:EE:FF -5
-python tools/probe_units.py AA:BB:CC:DD:EE:FF
-```
-
----
+`tools/` has standalone probes for adapters with direct BLE access (`dump_gatt.py`, `probe_climate.py`, `probe_time.py`, `probe_units.py`); for a device behind a proxy use `xiaomi_lywsd.dump_gatt`.
 
 ## References
 
-- [`docs/protocol.md`](docs/protocol.md) — reverse-engineered GATT characteristic reference for this integration
-- [h4/lywsd02](https://github.com/h4/lywsd02) — GATT UUID / payload reference implementation
-- [ashald/home-assistant-lywsd02](https://github.com/ashald/home-assistant-lywsd02) — 12h/24h clock-mode payload reference
+- [`docs/protocol.md`](docs/protocol.md) — GATT characteristic reference
+- [h4/lywsd02](https://github.com/h4/lywsd02) — UUID / payload reference implementation
+- [ashald/home-assistant-lywsd02](https://github.com/ashald/home-assistant-lywsd02) — 12h/24h payload reference
 - [pvvx/ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer) — custom firmware for LYWSD03MMC
 
 <!-- hass-standards:support:start -->
