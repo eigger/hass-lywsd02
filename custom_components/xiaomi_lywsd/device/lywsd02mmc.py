@@ -194,6 +194,10 @@ class Lywsd02mmc(LywsdDevice):
         one_way = (monotonic() - started) / 2.0
         epoch, tz_offset = decode_time(raw)
         base_ts = _utc_timestamp(when)
+        # A short read carries no timezone byte; decode_time's 0 is a filler,
+        # not something the device said, so it must not be compared.
+        if len(raw) < 5:
+            tz_offset = None
         return ClockReading(
             epoch=epoch,
             tz_offset_hours=tz_offset,
