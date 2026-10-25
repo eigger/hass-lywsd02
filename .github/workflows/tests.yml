@@ -1,9 +1,10 @@
 name: Tests
 'on':
   push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+    branches:
+    - main
+  pull_request: null
+  workflow_dispatch: null
 permissions:
   contents: read
 concurrency:
@@ -11,9 +12,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   current:
-    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@0c1592977591ecba077a4666d699840062711201
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@ca740d88b32fa5dcbc94c41fce2908450c76ed50
     with:
-      standards-ref: 0c1592977591ecba077a4666d699840062711201
+      standards-ref: ca740d88b32fa5dcbc94c41fce2908450c76ed50
       domain: xiaomi_lywsd
       python-versions: '["3.14"]'
       requirements: requirements-test.txt
@@ -22,9 +23,9 @@ jobs:
       test-profile: ha
       pytest-args: tests/components/xiaomi_lywsd/ -v
   minimum-ha:
-    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@0c1592977591ecba077a4666d699840062711201
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@ca740d88b32fa5dcbc94c41fce2908450c76ed50
     with:
-      standards-ref: 0c1592977591ecba077a4666d699840062711201
+      standards-ref: ca740d88b32fa5dcbc94c41fce2908450c76ed50
       domain: xiaomi_lywsd
       python-versions: '["3.13"]'
       requirements: requirements-test-minimum.txt
