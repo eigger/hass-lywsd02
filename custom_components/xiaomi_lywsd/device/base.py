@@ -47,7 +47,8 @@ class ClockReading:
     """
 
     epoch: int
-    tz_offset_hours: int
+    # None when the device answered without a timezone byte (a 4-byte read).
+    tz_offset_hours: int | None
     drift_seconds: float  # device clock - HA clock
     one_way_seconds: float = 0.0
     sampled_at: float = 0.0

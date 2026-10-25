@@ -83,6 +83,10 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
         self.identifier = address.replace(":", "")[-8:]
         self._units_warn_logged = False
         self._drift_floor_warned = False
+        # Offset last written to cure a stale timezone byte, and whether the
+        # device has shown it does not keep that byte at all.
+        self._tz_attempted: int | None = None
+        self._tz_unsupported = False
         self._session_start: float | None = None
         self._unsub_duration: Callable[[], None] | None = None
         self.store = LywsdStore(hass, entry.entry_id)
@@ -292,16 +296,49 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
 
         self.data.observed_drift = reading.drift_seconds
         self.data.clock_checked = now
-        if abs(reading.drift_seconds) <= tolerance:
+
+        # Drift compares UTC epochs, which a DST change leaves untouched: only
+        # the offset stored beside the epoch moves, and with it the local time
+        # the display shows. So a stale offset is a wrong clock whatever the
+        # drift says.
+        utcoffset = now.utcoffset()
+        offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
+        device_tz = reading.tz_offset_hours
+        if device_tz == offset:
+            # The device keeps the byte after all (or was reset and took it).
+            self._tz_attempted = None
+            self._tz_unsupported = False
+        tz_stale = (
+            device_tz is not None and device_tz != offset and not self._tz_unsupported
+        )
+        if tz_stale and self._tz_attempted == offset:
+            # Already wrote this offset and the device still reports another:
+            # it does not keep the byte, and rewriting would only spend a
+            # connection and move last_sync every hour for nothing.
+            self._tz_unsupported = True
+            tz_stale = False
+            _LOGGER.warning(
+                "LYWSD %s: device keeps reporting UTC offset %+d after being "
+                "written %+d — no longer checking the offset. Please report "
+                "this with your firmware version.",
+                self.address,
+                device_tz,
+                offset,
+            )
+        drifted = abs(reading.drift_seconds) > tolerance
+        if not drifted and not tz_stale:
             return False
 
         # A write that does not take would otherwise repeat every poll. Most
         # likely cause is a firmware whose epoch is not the UTC one this
         # integration assumes (docs/protocol.md §3): the error would then read
-        # as a constant timezone-sized offset that no write can close.
+        # as a constant timezone-sized offset that no write can close. A stale
+        # offset alone is exempt: it is cured by one write, and the check above
+        # catches the case where it is not.
         last_sync = self.data.last_sync
         if (
-            last_sync is not None
+            drifted
+            and last_sync is not None
             and (now - last_sync).total_seconds() < DRIFT_SYNC_MIN_INTERVAL_SECONDS
         ):
             if not self._drift_floor_warned:
@@ -315,26 +352,29 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
                 )
             return False
 
-        utcoffset = now.utcoffset()
-        offset = int(utcoffset.total_seconds() // 3600) if utcoffset else 0
+        tz_note = f", UTC offset {device_tz:+d} -> {offset:+d}" if tz_stale else ""
         try:
             result = await device.set_time(client, now, offset, reading=reading)
         except Exception as err:
             _LOGGER.warning(
-                "LYWSD %s: clock was off by %.1fs but the write failed: %s",
+                "LYWSD %s: clock was off by %.1fs%s but the write failed: %s",
                 self.address,
                 reading.drift_seconds,
+                tz_note,
                 err,
             )
             return False
 
         _LOGGER.debug(
-            "LYWSD %s: clock was off by %.1fs (tolerance %ss) — synced on the "
-            "poll connection",
+            "LYWSD %s: clock was off by %.1fs%s (tolerance %ss) — synced on "
+            "the poll connection",
             self.address,
             result.drift_seconds,
+            tz_note,
             tolerance,
         )
+        if tz_stale:
+            self._tz_attempted = offset
         self.note_sync(
             result.drift_seconds,
             dt_util.now(),

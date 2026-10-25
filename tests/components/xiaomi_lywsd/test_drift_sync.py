@@ -60,12 +60,12 @@ def _coord(hass, options: dict | None = None):
     return hass, entry, coord
 
 
-def _client(device_offset: float) -> FakeBleakClient:
+def _client(device_offset: float, tz_hours: int = 9) -> FakeBleakClient:
     """Fake device whose clock sits ``device_offset`` seconds off NOW."""
     client = FakeBleakClient(
         {
             UUID_BATTERY: b"\x5a",
-            UUID_TIME: encode_time(int(NOW.timestamp() + device_offset), 9),
+            UUID_TIME: encode_time(int(NOW.timestamp() + device_offset), tz_hours),
         },
         notify={UUID_DATA: b"\x1a\x09\x37"},
     )
@@ -80,7 +80,7 @@ def _client(device_offset: float) -> FakeBleakClient:
     return client
 
 
-async def _poll(coord, client):
+async def _poll(coord, client, now=NOW):
     ble = MagicMock()
     ble.address = "AA:BB:CC:DD:EE:FF"
     with (
@@ -99,7 +99,7 @@ async def _poll(coord, client):
         ) as connect,
         patch(
             "custom_components.xiaomi_lywsd.coordinator.dt_util.now",
-            return_value=NOW,
+            return_value=now,
         ),
     ):
         data = await coord._async_update_data()
@@ -210,6 +210,103 @@ async def test_poll_reads_the_clock_but_writes_nothing_within_tolerance(hass):
     assert data.clock_checked == NOW
     # Nothing was corrected, so the sync history must not claim otherwise.
     assert data.last_sync is None
+
+
+@pytest.mark.asyncio
+async def test_poll_resyncs_when_only_the_utc_offset_changed(hass):
+    """A DST change moves the offset, not the epoch — drift alone misses it."""
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    client = _client(0.0, tz_hours=8)
+
+    data, connect = await _poll(coord, client)
+
+    written = _time_writes(client)
+    assert len(written) == 1
+    assert decode_time(written[0])[1] == 9
+    assert connect.await_count == 1
+    assert data.last_sync == NOW
+
+
+@pytest.mark.asyncio
+async def test_stale_offset_is_written_even_right_after_a_sync(hass):
+    """The min-interval guard is for epoch errors, not a DST change."""
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    coord.data.last_sync = NOW - dt.timedelta(minutes=5)
+    client = _client(0.0, tz_hours=8)
+
+    await _poll(coord, client)
+
+    assert len(_time_writes(client)) == 1
+
+
+@pytest.mark.asyncio
+async def test_device_that_ignores_the_offset_is_written_once_not_hourly(hass, caplog):
+    """FakeBleakClient keeps reporting +8 after the write, like such firmware."""
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    client = _client(0.0, tz_hours=8)
+
+    await _poll(coord, client)
+    assert len(_time_writes(client)) == 1
+    # The device's clock is right in UTC at each later poll; only its byte is.
+    later = NOW + dt.timedelta(hours=2)
+    client = _client(7200.0, tz_hours=8)
+    await _poll(coord, client, later)
+    assert _time_writes(client) == []
+    assert "no longer checking the offset" in caplog.text
+
+    client = _client(14400.0, tz_hours=8)
+    await _poll(coord, client, later + dt.timedelta(hours=2))
+    assert _time_writes(client) == []
+
+
+@pytest.mark.asyncio
+async def test_latch_clears_once_the_device_reports_the_right_offset(hass):
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    await _poll(coord, _client(0.0, tz_hours=8))
+    await _poll(coord, _client(7200.0, tz_hours=8), NOW + dt.timedelta(hours=2))
+    assert coord._tz_unsupported
+
+    await _poll(coord, _client(14400.0, tz_hours=9), NOW + dt.timedelta(hours=4))
+    assert not coord._tz_unsupported
+    assert coord._tz_attempted is None
+
+    client = _client(18000.0, tz_hours=8)
+    await _poll(coord, client, NOW + dt.timedelta(hours=5))
+    assert len(_time_writes(client)) == 1
+
+
+@pytest.mark.asyncio
+async def test_short_time_read_without_offset_byte_is_not_compared(hass):
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    client = _client(0.0)
+    client._store[UUID_TIME.lower()] = int(NOW.timestamp()).to_bytes(4, "little")
+
+    await _poll(coord, client)
+
+    assert _time_writes(client) == []
+
+
+@pytest.mark.asyncio
+async def test_negative_half_hour_zone_matches_the_floored_offset(hass):
+    """-3:30 floors to -4 on every write path, so a device holding -4 is fine."""
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    st_johns = dt.timezone(dt.timedelta(hours=-3, minutes=-30))
+    now = NOW.astimezone(st_johns)
+    client = _client(0.0, tz_hours=-4)
+
+    await _poll(coord, client, now)
+
+    assert _time_writes(client) == []
+
+
+@pytest.mark.asyncio
+async def test_poll_leaves_a_matching_offset_alone(hass):
+    _hass, _entry, coord = _coord(hass, {"auto_sync_tolerance": 60})
+    client = _client(0.0, tz_hours=9)
+
+    await _poll(coord, client)
+
+    assert _time_writes(client) == []
 
 
 @pytest.mark.asyncio
