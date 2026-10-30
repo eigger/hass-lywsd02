@@ -12,7 +12,7 @@ Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration
 [![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-lywsd02/tests.yml?branch=main&style=flat&label=Tests)](https://github.com/eigger/hass-lywsd02/actions/workflows/tests.yml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-lywsd02/validate.yml?branch=main&style=flat&label=Validate)](https://github.com/eigger/hass-lywsd02/actions/workflows/validate.yml)
 [![License](https://img.shields.io/github/license/eigger/hass-lywsd02?style=flat)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/eigger/hass-lywsd02/total?style=flat&color=41BDF5&label=Downloads)](https://github.com/eigger/hass-lywsd02/releases)
+[![Downloads](https://img.shields.io/github/downloads/eigger/hass-lywsd02/latest/total?style=flat&color=41BDF5&label=Downloads)](https://github.com/eigger/hass-lywsd02/releases)
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
