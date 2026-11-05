@@ -21,10 +21,10 @@
     "README.ko.md": "#설치"
   },
   "readme": {
-    "title": "hass-lywsd02",
+    "title": "Xiaomi LYWSD02 for Home Assistant",
     "descriptions": {
-      "en": "Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration",
-      "ko": "Xiaomi LYWSD02 / LYWSD02MMC E-Ink 온습도계를 위한 Home Assistant 통합입니다."
+      "en": "A Home Assistant custom integration for Xiaomi LYWSD02 and LYWSD02MMC E-Ink temperature and humidity sensors.",
+      "ko": "Xiaomi LYWSD02 및 LYWSD02MMC E-Ink 온습도계를 위한 Home Assistant 커스텀 통합입니다."
     },
     "issues": true,
     "discussions": true,

@@ -1,7 +1,7 @@
 <!-- hass-standards:header:start -->
-# hass-lywsd02
+# Xiaomi LYWSD02 for Home Assistant
 
-Xiaomi LYWSD02 / LYWSD02MMC E-Ink Thermo-Hygrometer Home Assistant Integration
+A Home Assistant custom integration for Xiaomi LYWSD02 and LYWSD02MMC E-Ink temperature and humidity sensors.
 
 **English** | [한국어](README.ko.md)
 
@@ -41,15 +41,24 @@ connection. Temperature, humidity and battery are only reachable over GATT.
 
 Protocol notes: [`docs/protocol.md`](docs/protocol.md). Please include your firmware version in issues.
 
+## Requirements
+
+- **Home Assistant:** 2025.1.0 or later.
+- **Bluetooth:** An active Bluetooth proxy for polling and writes.
+
 ## Installation
 
 <!-- hass-standards:installation:start -->
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-lywsd02)
 <!-- hass-standards:installation:end -->
 
-1. Install **Xiaomi LYWSD** from HACS, or copy `custom_components/xiaomi_lywsd` into your `custom_components` directory.
-2. Restart Home Assistant.
-3. Add **Xiaomi LYWSD** under **Settings** → **Devices & services**, or accept the Bluetooth discovery prompt (otherwise add it by MAC address).
+1. Click the badge above to open the repository in Marketplace.
+2. If you need to add it yourself, go to **Settings → Marketplace → Add from link** and enter <https://github.com/eigger/hass-lywsd02>. Connect GitHub if prompted.
+3. Select **Install**. Restart Home Assistant if prompted, then continue to [Configuration](#configuration).
+
+## Configuration
+
+Add **Xiaomi LYWSD** under **Settings** → **Devices & services**, or accept the Bluetooth discovery prompt (otherwise add it by MAC address).
 
 ### Bluetooth proxy
 

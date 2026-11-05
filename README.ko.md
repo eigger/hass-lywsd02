@@ -1,7 +1,7 @@
 <!-- hass-standards:header:start -->
-# hass-lywsd02
+# Xiaomi LYWSD02 for Home Assistant
 
-Xiaomi LYWSD02 / LYWSD02MMC E-Ink 온습도계를 위한 Home Assistant 통합입니다.
+Xiaomi LYWSD02 및 LYWSD02MMC E-Ink 온습도계를 위한 Home Assistant 커스텀 통합입니다.
 
 [English](README.md) | **한국어**
 
@@ -15,8 +15,6 @@ Xiaomi LYWSD02 / LYWSD02MMC E-Ink 온습도계를 위한 Home Assistant 통합�
 [![Downloads](https://img.shields.io/github/downloads/eigger/hass-lywsd02/latest/total?style=flat&color=41BDF5&label=Downloads)](https://github.com/eigger/hass-lywsd02/releases)
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
-
-Downloads 배지는 릴리스 asset 다운로드 합계이며 활성 설치 수가 아닙니다.
 
 ## 이 통합이 필요한 이유
 
@@ -41,15 +39,24 @@ Downloads 배지는 릴리스 asset 다운로드 합계이며 활성 설치 수�
 
 프로토콜 설명: [`docs/protocol.md`](docs/protocol.md). 이슈를 등록할 때 펌웨어 버전을 알려 주세요.
 
+## 요구사항
+
+- **Home Assistant:** 2025.1.0 이상.
+- **Bluetooth:** 폴링과 쓰기를 지원하는 활성 Bluetooth 프록시.
+
 ## 설치
 
 <!-- hass-standards:installation:start -->
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-lywsd02)
 <!-- hass-standards:installation:end -->
 
-1. HACS에서 **Xiaomi LYWSD**를 설치하거나 `custom_components/xiaomi_lywsd`를 `custom_components` 디렉터리에 복사합니다.
-2. Home Assistant를 다시 시작합니다.
-3. **설정** → **기기 및 서비스**에서 **Xiaomi LYWSD**를 추가하거나 Bluetooth 검색 알림을 수락합니다(검색되지 않으면 MAC 주소로 추가).
+1. 위 배지를 클릭해 마켓플레이스에서 저장소를 엽니다.
+2. 저장소를 직접 추가하려면 **설정 → 마켓플레이스 → 링크에서 추가**에서 <https://github.com/eigger/hass-lywsd02>을 입력합니다. 안내가 표시되면 GitHub 계정을 연결합니다.
+3. **설치**를 선택합니다. 재시작 안내가 표시되면 Home Assistant를 재시작합니다. 설치가 끝나면 [설정](#설정)으로 이동합니다.
+
+## 설정
+
+**설정** → **기기 및 서비스**에서 **Xiaomi LYWSD**를 추가하거나 Bluetooth 검색 알림을 수락합니다(검색되지 않으면 MAC 주소로 추가).
 
 ### Bluetooth 프록시
 
