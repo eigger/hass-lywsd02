@@ -18,6 +18,7 @@ from homeassistant.components import bluetooth
 from homeassistant.const import CONF_ADDRESS, Platform
 from homeassistant.core import (
     HomeAssistant,
+    callback,
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
@@ -61,7 +62,13 @@ from .const import (
     MODEL,
 )
 from .coordinator import LywsdCoordinator
-from .device import LywsdDevice, LywsdVerifyError, device_for
+from .device import (
+    LywsdClockRepairError,
+    LywsdDevice,
+    LywsdUnsupportedError,
+    LywsdVerifyError,
+    device_for,
+)
 from .types import LywsdConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -210,10 +217,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: LywsdConfigEntry) -> boo
         raise
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    # After the platforms: a listener registered before a failed platform setup
+    # would leak, and the product id is persisted, so restarts lose nothing.
+    _async_track_product_id(hass, entry, address)
     _async_register_services(hass)
     _async_maybe_create_proxy_issues(hass, entry, address)
 
     return True
+
+
+def _async_track_product_id(
+    hass: HomeAssistant, entry: LywsdConfigEntry, address: str
+) -> None:
+    """Learn the hardware generation from the MiBeacon advertisement.
+
+    Only the product id is taken; the frame carries no climate data on these
+    devices. The listener stays registered so a swapped device under the same
+    entry is picked up. Purely informational, so a Bluetooth stack that is not
+    ready must never fail setup.
+    """
+    coordinator = entry.runtime_data
+
+    @callback
+    def _on_advertisement(service_info, _change) -> None:
+        coordinator.async_note_service_info(service_info)
+
+    try:
+        last = bluetooth.async_last_service_info(hass, address, connectable=False)
+        if last is not None:
+            coordinator.async_note_service_info(last)
+        entry.async_on_unload(
+            bluetooth.async_register_callback(
+                hass,
+                _on_advertisement,
+                bluetooth.BluetoothCallbackMatcher(address=address),
+                bluetooth.BluetoothScanningMode.PASSIVE,
+            )
+        )
+    except Exception as err:  # pragma: no cover - defensive
+        _LOGGER.debug("LYWSD %s: advertisement tracking unavailable: %s", address, err)
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
@@ -251,8 +293,10 @@ async def async_execute(
     that so poll failures are not double-counted and mid-failure broadcasts
     cannot flip ``last_update_success``.
 
-    ``LywsdVerifyError`` is never retried — the device already accepted the write
-    and re-sending only causes extra E-Ink refreshes / battery use.
+    ``LywsdVerifyError``, ``LywsdUnsupportedError`` and ``LywsdClockRepairError``
+    are never retried or wrapped: the device already accepted (or deliberately
+    rejected) the write, and re-sending only causes extra E-Ink refreshes /
+    battery use. Callers (e.g. the clock-mode select) match on these types.
     ``wrap_errors=False`` skips wrapping unexpected errors as ``HomeAssistantError``
     (used by quiet auto-sync); the exception is still raised.
     """
@@ -287,7 +331,7 @@ async def async_execute(
                 result = await op(client, device)
                 _clear_proxy_issues(hass, entry)
                 return result
-            except LywsdVerifyError:
+            except (LywsdVerifyError, LywsdUnsupportedError, LywsdClockRepairError):
                 raise
             except HomeAssistantError:
                 # Missing device / explicit HA errors — do not burn retries.

@@ -42,6 +42,7 @@ async def test_last_sync_survives_a_restart(hass):
     first.note_sync(-12.5, synced_at)
     first.data.units = "celsius"
     first.data.time_format = "24h"
+    first.data.product_id = 0x045B
     await first.async_save_persisted()
 
     # A fresh coordinator stands in for the process restart.
@@ -53,6 +54,8 @@ async def test_last_sync_survives_a_restart(hass):
     assert second.data.clock_drift == -12.5
     assert second.data.units == "celsius"
     assert second.data.time_format == "24h"
+    # Known before the first advertisement, so the clock-mode lock holds.
+    assert second.data.product_id == 0x045B
 
 
 @pytest.mark.asyncio

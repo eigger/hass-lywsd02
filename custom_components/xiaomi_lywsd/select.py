@@ -16,7 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import async_execute, async_read_battery_into
-from .const import MANUFACTURER, MODEL, TIME_FORMAT_OPTIONS
+from .const import MANUFACTURER, MODEL, TIME_FORMAT_24H, TIME_FORMAT_OPTIONS
 from .device import (
     LywsdClockRepairError,
     LywsdUnsupportedError,
@@ -124,19 +124,27 @@ class LywsdDisplayUnitsSelect(_LywsdSelectBase):
 class LywsdTimeFormatSelect(_LywsdSelectBase):
     """12h / 24h E-Ink clock mode.
 
-    Verified on LYWSD02MMC (device_id 0x2542) — see docs/protocol.md. Support
-    still varies by firmware revision, but a device that refuses the command now
-    says so provably, so the entity is created enabled. There is no read-back,
-    so state is optimistic and restored across restarts.
+    Verified on LYWSD02MMC (device_id 0x2542) — see docs/protocol.md. A
+    first-generation LYWSD02 (0x045B, read from the MiBeacon advertisement) has
+    no 12h mode: the entity is locked to 24h and never writes. Otherwise there
+    is no read-back, so state is optimistic and restored across restarts.
     """
-
-    _attr_options = TIME_FORMATS
 
     def __init__(self, hass: HomeAssistant, entry: LywsdConfigEntry) -> None:
         super().__init__(hass, entry, "time_format")
 
     @property
+    def options(self) -> list[str]:
+        # A first-generation LYWSD02 has no 12h mode, so 24h is a fact about
+        # the hardware rather than an optimistic guess — show it, offer nothing.
+        if self._entry.runtime_data.clock_mode_fixed_24h:
+            return [TIME_FORMAT_24H]
+        return TIME_FORMATS
+
+    @property
     def current_option(self) -> str | None:
+        if self._entry.runtime_data.clock_mode_fixed_24h:
+            return TIME_FORMAT_24H
         return self._entry.runtime_data.data.time_format
 
     async def async_added_to_hass(self) -> None:
@@ -149,6 +157,13 @@ class LywsdTimeFormatSelect(_LywsdSelectBase):
 
     async def async_select_option(self, option: str) -> None:
         coordinator = self._entry.runtime_data
+        if coordinator.clock_mode_fixed_24h:
+            # Nothing to write: the display already is, and can only be, 24h.
+            if option == TIME_FORMAT_24H:
+                return
+            raise HomeAssistantError(
+                "1세대 LYWSD02는 24시간 표시만 지원합니다 (12시간 모드 없음)."
+            )
         previous = coordinator.data.time_format
         utcoffset = dt_util.now().utcoffset()
         tz_offset_hours = int(utcoffset.total_seconds() // 3600) if utcoffset else 0

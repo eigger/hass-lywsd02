@@ -30,6 +30,7 @@ from .const import (
 )
 from .device import LywsdDevice
 from .device.lywsd02mmc import DEFAULT_CLIMATE_TIMEOUT
+from .mibeacon import FIXED_24H_PRODUCT_IDS, product_id_from_service_data
 from .store import LywsdStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,6 +45,8 @@ class LywsdData:
     battery: int | None = None
     units: str | None = None
     time_format: str | None = None
+    # MiBeacon product id from the advertisement (0x045B = first-gen LYWSD02).
+    product_id: int | None = None
     last_sync: datetime | None = None
     clock_drift: float | None = None
     # Seconds the last write added for link latency + rounding.
@@ -179,6 +182,8 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
             self.data.units = stored["units"]
         if stored.get("time_format"):
             self.data.time_format = stored["time_format"]
+        if stored.get("product_id") is not None:
+            self.data.product_id = stored["product_id"]
 
     async def async_save_persisted(self) -> None:
         """Write durable state. Never let storage errors break a BLE action."""
@@ -192,9 +197,26 @@ class LywsdCoordinator(DataUpdateCoordinator[LywsdData]):
                 battery=self.data.battery,
                 units=self.data.units,
                 time_format=self.data.time_format,
+                product_id=self.data.product_id,
             )
         except Exception as err:  # pragma: no cover - defensive
             _LOGGER.warning("LYWSD %s: store save failed: %s", self.address, err)
+
+    @property
+    def clock_mode_fixed_24h(self) -> bool:
+        """True when the hardware is known to have no 12h mode."""
+        return self.data.product_id in FIXED_24H_PRODUCT_IDS
+
+    @callback
+    def async_note_service_info(self, service_info) -> bool:
+        """Record the product id from an advertisement; True if it changed."""
+        product_id = product_id_from_service_data(service_info.service_data)
+        if product_id is None or product_id == self.data.product_id:
+            return False
+        self.data.product_id = product_id
+        self.hass.async_create_task(self.async_save_persisted())
+        self.async_update_listeners()
+        return True
 
     def note_sync(
         self,
