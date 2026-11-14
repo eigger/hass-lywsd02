@@ -79,6 +79,9 @@ class LywsdStore:
             "time_format": (
                 time_format if time_format in TIME_FORMAT_OPTIONS else None
             ),
+            # MiBeacon product id: lets a restart know the hardware generation
+            # before the first advertisement arrives.
+            "product_id": _parse_int(raw.get("product_id")),
         }
 
     async def async_save(
@@ -92,6 +95,7 @@ class LywsdStore:
         battery: int | None,
         units: str | None,
         time_format: str | None,
+        product_id: int | None = None,
     ) -> None:
         """Write the durable subset of coordinator state."""
         await self._store.async_save(
@@ -104,6 +108,7 @@ class LywsdStore:
                 "battery": battery,
                 "units": units,
                 "time_format": time_format,
+                "product_id": product_id,
             }
         )
 

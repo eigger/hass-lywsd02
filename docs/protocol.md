@@ -75,6 +75,8 @@
 | 12/24시간 모드 | **같은 UUID에 7바이트** `<IHB` (0, 0, mode) — `0xAA`=12h, `0x00`=24h | **검증됨** — LYWSD02MMC(0x2542) 실물에서 화면 전환 확인 |
 | 모드 명령의 epoch | `0`. 기기가 이를 시각 write로 읽으면 1970년으로 감 → 구현은 모드 write 직후 항상 시각을 다시 씀 | 미검증(이 개체에서는 시계 손상 없음) |
 | 모드 지원 여부 | 펌웨어 리비전에 따라 다름. read-back이 없어 낙관적 처리 | 사용자 보고 |
+| 모드 미지원 기기 | 1세대 LYWSD02(product id `0x045B`, xiaomi-ble 기준 `LYWSD02`), 펌웨어 `1.1.2_0097`은 `ebe0ccb7`이 고정 5바이트라 7바이트 모드 write를 ATT 오류 `0x0D`(Invalid Attribute Value Length)로 거부 — issue #34. nphil/ha-lywsd02, ashald/home-assistant-lywsd02, bluetooth-clocks도 1세대는 12h 미지원으로 기록. 모드 명령은 LYWSD02MMC(`0x16E4`/`0x2542`) 전용. 구현은 MiBeacon(`0xFE95`) 광고 byte 2–3의 product id로 1세대를 판별해 시계 모드를 24h로 고정하고 쓰지 않음(판별 전·불명이면 기존 동작) | 사용자 보고 + 커뮤니티 |
+| `ebe0ccd3` | 1바이트 R/W. `0x01` write는 받아들이지만 read-back은 `0x00`(nphil/ha-lywsd02 보고) → 12/24h 대체 경로 아님 | 커뮤니티 |
 | read-back 허용오차 | ±2초 | 계획서 기준 |
 
 음수 tz(예: -5) 왕복으로 int8 vs uint8을 판정해야 한다. 한국(+9)만 테스트하면

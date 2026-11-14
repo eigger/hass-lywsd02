@@ -119,7 +119,7 @@ The clock answers in whole seconds, so expect drift readings to scatter by about
 | Sensor | Failure count / Last failure / Connection duration | Diagnostic |
 | Binary sensor | Connectivity | BLE session open / closed |
 | Select | Display units | °C / °F, screen only |
-| Select | Clock mode | 12h / 24h, screen only |
+| Select | Clock mode | 12h / 24h, screen only. A first-generation LYWSD02 (`0x045B`) has no 12h mode, so it is locked to 24h |
 | Button | Sync time | Write the current time to the clock |
 
 ## Services

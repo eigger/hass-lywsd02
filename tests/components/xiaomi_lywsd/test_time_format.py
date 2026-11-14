@@ -266,3 +266,67 @@ async def test_battery_read_on_units_write_connection(hass):
 
     await async_read_battery_into(client, device, coordinator)
     assert coordinator.data.battery == 81
+
+
+def _patch_ble(ble):
+    return (
+        patch(
+            "custom_components.xiaomi_lywsd.bluetooth.async_ble_device_from_address",
+            return_value=ble,
+        ),
+        patch(
+            "custom_components.xiaomi_lywsd.close_stale_connections_by_address",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "custom_components.xiaomi_lywsd.establish_connection",
+            new_callable=AsyncMock,
+            return_value=MagicMock(is_connected=False),
+        ),
+        patch("custom_components.xiaomi_lywsd.asyncio.sleep", new_callable=AsyncMock),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exc_cls", [LywsdUnsupportedError, LywsdClockRepairError])
+async def test_async_execute_does_not_retry_or_wrap_mode_errors(hass, exc_cls):
+    """Re-running the op would re-send the rejected mode command."""
+    from custom_components.xiaomi_lywsd import async_execute
+
+    hass, entry = _entry(hass)
+    ble = MagicMock()
+    ble.address = entry.runtime_data.address
+    op = AsyncMock(side_effect=exc_cls("rejected"))
+
+    p1, p2, p3, p4 = _patch_ble(ble)
+    with p1, p2, p3, p4:
+        with pytest.raises(exc_cls):
+            await async_execute(hass, entry, op)
+
+    assert op.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_select_explains_unsupported_through_real_async_execute(hass):
+    hass, entry = _entry(hass)
+    coordinator = entry.runtime_data
+    coordinator.data.time_format = "24h"
+    select = LywsdTimeFormatSelect(hass, entry)
+    ble = MagicMock()
+    ble.address = coordinator.address
+
+    async def reject(self, client, option, *args, **kwargs):
+        raise LywsdUnsupportedError("ATT 0x0D")
+
+    p1, p2, p3, p4 = _patch_ble(ble)
+    with (
+        p1,
+        p2,
+        p3,
+        p4,
+        patch.object(Lywsd02mmc, "set_time_format", reject),
+    ):
+        with pytest.raises(HomeAssistantError, match="거부했습니다"):
+            await select.async_select_option("12h")
+
+    assert coordinator.data.time_format == "24h"
